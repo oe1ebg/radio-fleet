@@ -155,7 +155,8 @@ def _tool(node: Node, data_root: Path) -> Tool:
     commit = fields["commit"].text()
     if not _COMMIT.fullmatch(commit):
         raise fields["commit"].error("expected a git commit: 7 to 40 hex digits")
-    return Tool(data_root / fields["path"].text(), commit)
+    # Absolute, so that a bare name such as `jayt` is the file in the data root and not a PATH lookup.
+    return Tool((data_root / fields["path"].text()).absolute(), commit)
 
 
 def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:

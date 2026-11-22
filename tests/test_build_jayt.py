@@ -183,3 +183,14 @@ def test_the_jayt_path_is_relative_to_the_data_root_and_the_commit_is_checked(da
     fleet_file.write_text(fleet_file.read_text().replace("commit: '0000000'", "commit: main"))
     with pytest.raises(ConfigError, match=r"tools\.jayt\.commit: expected a git commit: 7 to 40 hex digits"):
         fleet.load(fleet_file, data)
+
+
+def test_a_bare_jayt_path_is_the_file_in_the_data_root_not_a_path_lookup(
+    data: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fleet_file = data / "fleet.yaml"
+    fleet_file.write_text(fleet_file.read_text().replace("path: tools/jayt", "path: jayt"))
+    monkeypatch.chdir(data)
+    tool = fleet.load(Path("fleet.yaml"), Path(".")).jayt
+    assert tool is not None
+    assert tool.path == data.absolute() / "jayt"
