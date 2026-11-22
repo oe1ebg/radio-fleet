@@ -125,6 +125,14 @@ def test_a_dmr_repeater_expands_to_the_template_channels(tmp_path: Path) -> None
     ]
 
 
+def test_a_dmr_channel_with_a_talkgroup_or_without_a_template_is_not_expanded(tmp_path: Path) -> None:
+    write(tmp_path, {"talkgroups.yaml": TALKGROUPS, "dmr_templates.yaml": TEMPLATES})
+    template = sources.load(tmp_path).dmr_templates["standard"]
+    local = Channel("XX0DL", 438_962_500, 431_462_500, Mode.DMR, time_slot=2, tx_talkgroup="TG2")
+    plain = Channel("XX0DP", 438_962_500, 431_462_500, Mode.DMR)
+    assert sources.expand_dmr([local, plain], lambda channel: template if channel is local else None) == [local, plain]
+
+
 def test_an_own_list_reads_into_channels_with_the_list_tags(tmp_path: Path) -> None:
     own = """
 name: synthetic

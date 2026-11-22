@@ -67,9 +67,11 @@ fleet select --radio uv5r-mini
 ```
 
 ```text
-uv5r-mini (Baofeng UV-5R mini): 5 channels, 0 zones, 0 scan lists
+uv5r-mini (Baofeng UV-5R mini): 7 channels, 0 zones, 0 scan lists
   2m Call          RX 145.50000 TX 145.50000 FM power 5W [simplex]
   70cm Call        RX 433.50000 TX 433.50000 FM power 5W [simplex]
+  PMR 1            RX 446.00625 TX 446.00625 FM power 5W RX only [listen]
+  Freenet 1        RX 149.02500 TX 149.02500 FM power 5W RX only [listen]
   XX1AA            RX 145.60000 TX 145.00000 FM tone TX CTCSS 88.5 tone RX CTCSS 88.5 power 5W [oevsv-repeater-db]
   XX1CC            RX 438.62500 TX 431.02500 FM tone TX DCS 023 power 5W [oevsv-repeater-db]
   XX3DD            RX 145.66250 TX 145.06250 FM tone TX CTCSS 123 power 5W [oevsv-repeater-db]
@@ -81,9 +83,10 @@ drops: 6
   XX1CC: mode C4FM not supported
   XX3EE: TX 445.00000 MHz outside the TX bands
 overrides: 0
+overrides that match nothing: 0
 ```
 
-The own list `simplex` comes first, then the upstream repeaters of the region. The text in brackets is the source of each channel. Every channel that the radio cannot carry is in `drops`, with the reason.
+The own lists `simplex` and `listen` come first, then the upstream repeaters of the region. The text in brackets is the source of each channel. The channels of `listen` are receive-only (`RX only`): the radio never transmits on them. The profile's `power: High` is the power level of every channel, and its `power_levels` map `High` to `5W`. Every channel that the radio cannot carry is in `drops`, with the reason.
 
 ## 5. Build the CHIRP radio
 
@@ -105,10 +108,14 @@ cat build/uv5r-mini/uv5r-mini.csv
 Location,Name,Frequency,Duplex,Offset,Tone,rToneFreq,cToneFreq,DtcsCode,DtcsPolarity,RxDtcsCode,CrossMode,Mode,TStep,Skip,Power,Comment,URCALL,RPT1CALL,RPT2CALL,DVCODE
 1,2m Call,145.500000,,0.000000,,88.5,88.5,023,NN,023,Tone->Tone,FM,12.50,,5.0W,simplex,,,,
 2,70cm Call,433.500000,,0.000000,,88.5,88.5,023,NN,023,Tone->Tone,FM,12.50,,5.0W,simplex,,,,
-3,XX1AA,145.600000,-,0.600000,TSQL,88.5,88.5,023,NN,023,Tone->Tone,NFM,12.50,,5.0W,oevsv-repeater-db,,,,
-4,XX1CC,438.625000,-,7.600000,Cross,88.5,88.5,023,NN,023,DTCS->,FM,12.50,,5.0W,oevsv-repeater-db,,,,
-5,XX3DD,145.662500,-,0.600000,Tone,123.0,88.5,023,NN,023,Tone->Tone,FM,12.50,,5.0W,oevsv-repeater-db,,,,
+3,PMR 1,446.006250,off,0.000000,,88.5,88.5,023,NN,023,Tone->Tone,NFM,6.25,,5.0W,listen,,,,
+4,Freenet 1,149.025000,off,0.000000,,88.5,88.5,023,NN,023,Tone->Tone,NFM,12.50,,5.0W,listen,,,,
+5,XX1AA,145.600000,-,0.600000,TSQL,88.5,88.5,023,NN,023,Tone->Tone,NFM,12.50,,5.0W,oevsv-repeater-db,,,,
+6,XX1CC,438.625000,-,7.600000,Cross,88.5,88.5,023,NN,023,DTCS->,FM,12.50,,5.0W,oevsv-repeater-db,,,,
+7,XX3DD,145.662500,-,0.600000,Tone,123.0,88.5,023,NN,023,Tone->Tone,FM,12.50,,5.0W,oevsv-repeater-db,,,,
 ```
+
+The receive-only channels have the `Duplex` `off`, so the radio does not transmit on them.
 
 `build/uv5r-mini/` also has `selection.yaml`, the record of this build. The change report and `fleet applied` read it.
 
@@ -123,20 +130,22 @@ This step needs `dmrconf`. If it is not installed, the build fails with `dmrconf
    ```
 
    ```text
-   d878uv2plus (AnyTone D878UV II Plus): 8 channels, 4 zones, 2 scan lists
+   d878uv2plus (AnyTone D878UV II Plus): 10 channels, 4 zones, 2 scan lists
      2m Call          RX 145.50000 TX 145.50000 FM power High [simplex]
      70cm Call        RX 433.50000 TX 433.50000 FM power High [simplex]
      DMR Simplex      RX 433.45000 TX 433.45000 DMR CC1 TS1 talkgroup TG99 power High [simplex]
+     PMR 1            RX 446.00625 TX 446.00625 FM power High RX only [listen]
+     Freenet 1        RX 149.02500 TX 149.02500 FM power High RX only [listen]
      XX1AA            RX 145.60000 TX 145.00000 FM tone TX CTCSS 88.5 tone RX CTCSS 88.5 power High [oevsv-repeater-db]
      XX1BB 1 TG232    RX 438.96250 TX 431.46250 DMR CC1 TS1 talkgroup TG232 RX group Austria power High [oevsv-repeater-db]
      XX1BB 2 TG9      RX 438.96250 TX 431.46250 DMR CC1 TS2 talkgroup TG9 power High [oevsv-repeater-db]
      XX1CC            RX 438.62500 TX 431.02500 FM tone TX DCS 023 power High [oevsv-repeater-db]
      XX3DD            RX 145.66250 TX 145.06250 FM tone TX CTCSS 123 power High [oevsv-repeater-db]
    zone Simplex: 2m Call, 70cm Call, DMR Simplex
-   zone FM 2m: 2m Call, XX1AA, XX3DD
-   zone FM 70cm: 70cm Call, XX1CC
+   zone FM 2m: 2m Call, Freenet 1, XX1AA, XX3DD
+   zone FM 70cm: 70cm Call, PMR 1, XX1CC
    zone DMR: Hotspot (base), DMR Simplex, XX1BB 1 TG232, XX1BB 2 TG9
-   scan list FM: 2m Call, 70cm Call, XX1AA, XX1CC, XX3DD
+   scan list FM: 2m Call, 70cm Call, PMR 1, Freenet 1, XX1AA, XX1CC, XX3DD
    scan list DMR: Hotspot (base), DMR Simplex, XX1BB 1 TG232, XX1BB 2 TG9
    drops: 4
      XX5FF: 310 km from JJ00mm, beyond 80 km
@@ -144,6 +153,7 @@ This step needs `dmrconf`. If it is not installed, the build fails with `dmrconf
      XX1CC: mode C4FM not supported
      XX3EE: TX 445.00000 MHz outside the TX bands
    overrides: 0
+   overrides that match nothing: 0
    ```
 
 2. Build it:
@@ -175,9 +185,9 @@ Each radio's build in `build/` against its last applied build in `applied.yaml`.
 
 ## d878uv2plus: AnyTone D878UV II Plus (qdmr)
 
-First build, nothing applied: 8 channels.
+First build, nothing applied: 10 channels.
 
-### Added (8)
+### Added (10)
 
 - 2m Call: rx 145.50000, tx 145.50000, mode FM, power High
 ...
@@ -188,12 +198,14 @@ Not built.
 
 ## uv5r-mini: Baofeng UV-5R mini (chirp)
 
-First build, nothing applied: 5 channels.
+First build, nothing applied: 7 channels.
 
-### Added (5)
+### Added (7)
 
 - 2m Call: rx 145.50000, tx 145.50000, mode FM, power 5W
 - 70cm Call: rx 433.50000, tx 433.50000, mode FM, power 5W
+- PMR 1: rx 446.00625, tx 446.00625, mode FM, bandwidth 12.5 kHz, power 5W, rx_only yes
+- Freenet 1: rx 149.02500, tx 149.02500, mode FM, bandwidth 12.5 kHz, power 5W, rx_only yes
 - XX1AA: rx 145.60000, tx 145.00000, mode FM, tone_tx CTCSS 88.5, tone_rx CTCSS 88.5, bandwidth 12.5 kHz, power 5W
 - XX1CC: rx 438.62500, tx 431.02500, mode FM, tone_tx DCS 023, power 5W
 - XX3DD: rx 145.66250, tx 145.06250, mode FM, tone_tx CTCSS 123, power 5W
@@ -248,7 +260,7 @@ fleet applied uv5r-mini
 ```
 
 ```text
-uv5r-mini: sha256:2d90061895bed8d3e7885334d39bba4b49964123e67aa1c14fda8d8afdc4c0d7 in applied.yaml
+uv5r-mini: sha256:93ecc57271df88a604de9204267f089abbdc6ca00c86ce4431e6d6e3fc7451d5 in applied.yaml
 git tag applied/uv5r-mini/2026-11-22
 ```
 
@@ -282,7 +294,7 @@ git tag applied/uv5r-mini/2026-11-22
    ```markdown
    ## uv5r-mini: Baofeng UV-5R mini (chirp)
 
-   Against the build applied on 2026-11-22: 6 channels, 4 unchanged.
+   Against the build applied on 2026-11-22: 8 channels, 6 unchanged.
 
    ### Added (1)
 
@@ -302,7 +314,11 @@ git tag applied/uv5r-mini/2026-11-22
 
    ### Overrides (1)
 
-   - XX3DD FM: tone_rx=CTCSS 123 (the repeater also uses the tone for squelch)
+   - XX3DD FM 2m: tone_rx=CTCSS 123 (the repeater also uses the tone for squelch)
+
+   ### Overrides that match nothing (0)
+
+   None.
    ```
 
 The report compares the new build with the applied one. It shows the new channel, the changed tone and the override with its reason.

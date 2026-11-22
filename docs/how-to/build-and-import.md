@@ -36,7 +36,7 @@ Needs: `dmrconf` from qdmr 0.15 on the `PATH`.
 
 5. Open `build/d878uv2plus/d878uv2plus.yaml` in qdmr, review it, and write it to the radio.
 
-The build keeps everything of the base and adds contacts, group lists, channels, zones and scan lists whose ids start with `gen_`. A rebuild first removes every `gen_` object, so do not give a hand-made object an id that starts with `gen_`. Zones get their channels in list A. Each generated channel refers to the first scan list that takes it. A zone or scan-list rule can add hand-made channels of the base by name with `base_channel`; a name that no hand-made channel or more than one has fails the build. The base can use qdmr's own tags `!default` and `!selected`; the build keeps them.
+The build keeps everything of the base and adds contacts, group lists, channels, zones and scan lists whose ids start with `gen_`. A rebuild first removes every `gen_` object, so do not give a hand-made object an id that starts with `gen_`. Zones get their channels in list A. Each generated channel refers to the first scan list that takes it, and a receive-only channel has `rxOnly: true`. A zone or scan-list rule can add hand-made channels of the base by name with `base_channel`; a name that no hand-made channel or more than one has fails the build. The base can use qdmr's own tags `!default` and `!selected`; the build keeps them.
 
 The check is `dmrconf verify --radio <dmrconf_radio>`. If it fails, the build shows dmrconf's message:
 
@@ -50,7 +50,7 @@ ERROR in cli/verify.cc@131: Crit: In list 'channels', In element 4 ('23cm Call')
 
 Needs: nothing besides radio-fleet.
 
-1. Set `renderer: chirp` and `power` in watts, such as `5W`.
+1. Set `renderer: chirp`, the default power level in `power` and the watts of each level in `power_levels`, such as `power: High` and `power_levels: {High: 5W, Low: 1W}`.
 2. Build:
 
    ```sh
@@ -63,11 +63,11 @@ Needs: nothing besides radio-fleet.
 
 3. In CHIRP, download the image from the radio, import `build/uv5r-mini/uv5r-mini.csv` into it, review the memories, and upload the image to the radio.
 
-The CSV has CHIRP's generic columns. Memories are numbered from 1 in the order of the selection. A bandwidth of 12.5 kHz or less gives `NFM`. The check counts the columns, the memory numbers, the memories against `channels` and each name against `name_length`.
+The CSV has CHIRP's generic columns. Memories are numbered from 1 in the order of the selection. A bandwidth of 12.5 kHz or less gives `NFM`. A receive-only channel has the `Duplex` `off`, so the radio does not transmit on it. The check counts the columns, the memory numbers, the memories against `channels` and each name against `name_length`.
 
 The CHIRP renderer carries FM only. These fail the build:
 
-- a channel without `power` in watts: `CHIRP needs the power in watts, such as 5W, not 'High'`
+- a channel without a power level: `CHIRP needs a power: give the profile a power level and its watts, such as power: High and power_levels: {High: 5W}`
 - a frequency or offset that is on none of the tuning steps 12.5, 6.25, 5 or 2.5 kHz
 
 ## Yaesu FT5D: ADMS-14 CSV
