@@ -129,7 +129,7 @@ def _selection(
         if not path.exists():
             raise snapshot.SnapshotError(f"no snapshot for {source!r} at {path}; run `fleet fetch`")
         upstream.extend(snapshot.read(path))
-    return build.fit(select(radio, upstream, own)), own
+    return select(radio, upstream, own, build.output_unfit(radio.renderer)), own
 
 
 def _print(selection: Selection) -> None:

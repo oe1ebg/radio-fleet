@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from radio_fleet import build, fleet, sources
+from radio_fleet import fleet, sources
 from radio_fleet.dmrconf import CheckError
 from radio_fleet.model import Channel, Ctcss, Dcs, Mode
 from radio_fleet.render import chirp
-from radio_fleet.selection import Drop, Selection, Zone, select
+from radio_fleet.selection import Drop, Selection, select
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 RADIO = fleet.load(EXAMPLES / "fleet.yaml", EXAMPLES).radios["uv5r-mini"]
@@ -72,18 +72,19 @@ def test_the_memory_limit_drops_channels_with_a_reason() -> None:
     assert ("70cm Call", "channel limit of 1 reached") in [(drop.name, drop.reason) for drop in selection.drops]
 
 
-def test_a_channel_chirp_cannot_carry_is_dropped_with_the_reason() -> None:
-    simplex = Channel("2m Call", 145_500_000, 145_500_000, Mode.FM)
+def test_a_channel_chirp_cannot_carry_takes_no_memory_and_is_dropped_with_the_reason() -> None:
     off_step = Channel("XX0OS", 145_600_100, 145_000_100, Mode.FM)
-    digital = Channel("XX0DM", 438_962_500, 431_462_500, Mode.DMR)
-    channels = (simplex, off_step, digital)
-    selection = build.fit(Selection(RADIO, channels, (Zone("All", channels),), (), ()))
-    assert selection.channels == (simplex,)
-    assert selection.zones == (Zone("All", (simplex,)),)
-    assert selection.drops == (
-        Drop("XX0OS", "RX 145.600100 MHz is on no CHIRP tuning step"),
-        Drop("XX0DM", "CHIRP's radios here carry FM, not DMR"),
+    first = Channel("XX0AA", 145_600_000, 145_000_000, Mode.FM)
+    second = Channel("XX0BB", 145_612_500, 145_012_500, Mode.FM)
+    radio = replace(
+        RADIO,
+        region=fleet.PrefixRegion(("XX",)),
+        own_lists=(),
+        capability=replace(RADIO.capability, channels=2),
     )
+    selection = select(radio, [off_step, first, second], sources.load(EXAMPLES / "sources"), chirp.unfit)
+    assert [channel.name for channel in selection.channels] == ["XX0AA", "XX0BB"]
+    assert selection.drops == (Drop("XX0OS", "RX 145.600100 MHz is on no CHIRP tuning step"),)
     with pytest.raises(chirp.RenderError, match=r"XX0OS: RX 145\.600100 MHz is on no CHIRP tuning step"):
         chirp.render(Selection(RADIO, (off_step,), (), (), ()))
 

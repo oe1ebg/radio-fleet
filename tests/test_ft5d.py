@@ -7,12 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from radio_fleet import build, fleet
+from radio_fleet import fleet, sources
 from radio_fleet.dmrconf import CheckError
 from radio_fleet.mcp import ConvertError, McpCli
 from radio_fleet.model import Channel, Ctcss, Dcs, Mode
 from radio_fleet.render import ft5d
-from radio_fleet.selection import Selection, Zone
+from radio_fleet.selection import Drop, Selection, Zone, select
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 RADIO = fleet.load(EXAMPLES / "fleet.yaml", EXAMPLES).radios["ft5d"]
@@ -92,17 +92,25 @@ def test_the_selection_goes_to_mcp_with_one_bank_filter_per_zone() -> None:
         ),
     ],
 )
-def test_a_channel_mcp_cannot_write_for_the_ft5d_is_dropped_with_the_reason(channel: Channel, reason: str) -> None:
-    selection = build.fit(
-        Selection(RADIO, (SIMPLEX, channel), (Zone("Simplex", (SIMPLEX,)), Zone("Other", (channel,))), (), ())
-    )
-    assert selection.channels == (SIMPLEX,)
-    assert selection.zones == (Zone("Simplex", (SIMPLEX,)),)
-    ((name, dropped), zone) = [(drop.name, drop.reason) for drop in selection.drops]
-    assert name == channel.name and reason in dropped
-    assert zone == ("zone Other", "holds no channel the output carries")
+def test_a_channel_mcp_cannot_write_for_the_ft5d_is_unfit_with_the_reason(channel: Channel, reason: str) -> None:
+    assert reason in (ft5d.unfit(channel) or "")
     with pytest.raises(ft5d.RenderError, match=reason):
         ft5d.render(Selection(RADIO, (channel,), (), (), ()), FakeMcp())
+
+
+def test_an_unfit_channel_takes_no_memory_and_leaves_no_empty_bank() -> None:
+    dcs = Channel("XX0DC", 438_625_000, 431_025_000, Mode.FM, tone_tx=Dcs(23))
+    radio = replace(
+        RADIO,
+        region=fleet.PrefixRegion(("XX",)),
+        own_lists=(),
+        capability=replace(RADIO.capability, channels=1),
+    )
+    selection = select(radio, [dcs, REPEATER], sources.load(EXAMPLES / "sources"), ft5d.unfit)
+    assert selection.channels == (REPEATER,)
+    assert [zone.name for zone in selection.zones] == ["FM 2m"]
+    assert Drop("XX0DC", "MCP's yaesu-ft5d output carries one CTCSS tone, no DCS") in selection.drops
+    assert not [drop for drop in selection.drops if "limit" in drop.reason]
 
 
 @pytest.mark.parametrize(("channels", "zones"), [(901, 24), (900, 25)])

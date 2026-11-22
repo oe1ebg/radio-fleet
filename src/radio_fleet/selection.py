@@ -10,6 +10,8 @@ from radio_fleet.fleet import Capability, DistanceRegion, Radio, Region
 from radio_fleet.model import Channel
 from radio_fleet.sources import AppliedOverride, Sources, apply_overrides, expand_dmr
 
+type Unfit = Callable[[Channel], str | None]
+
 
 @dataclass(frozen=True, slots=True)
 class Drop:
@@ -34,10 +36,11 @@ class Selection:
     overrides: tuple[AppliedOverride, ...]
 
 
-def select(radio: Radio, upstream: Sequence[Channel], sources: Sources) -> Selection:
+def select(radio: Radio, upstream: Sequence[Channel], sources: Sources, output_unfit: Unfit | None = None) -> Selection:
     """Own lists come first, in the profile's order, then the upstream channels of the region.
 
     The region applies to upstream channels only, before any override, so it reads the callsign.
+    `output_unfit` says why the radio's output cannot carry a channel; such a channel takes no memory.
     """
     drops: list[Drop] = []
     regional: list[Channel] = []
@@ -55,32 +58,15 @@ def select(radio: Radio, upstream: Sequence[Channel], sources: Sources) -> Selec
     capability = radio.capability
     kept: list[Channel] = []
     for channel in [*own, *regional]:
-        reason = _unfit(capability, channel)
+        named = _named(radio, channel)
+        reason = _unfit(capability, channel) or (output_unfit(named) if output_unfit else None)
         if reason is None and len(kept) == capability.channels:
             reason = f"channel limit of {capability.channels} reached"
         if reason:
             drops.append(Drop(channel.name, reason))
         else:
-            kept.append(_named(radio, channel))
+            kept.append(named)
     return Selection(radio, tuple(kept), _zones(radio, kept, drops), tuple(drops), tuple(applied))
-
-
-def without(selection: Selection, unfit: Callable[[Channel], str | None]) -> Selection:
-    """The selection without the channels a renderer's output cannot carry, each dropped with the reason,
-    and without the zones that are left empty."""
-    reasons = {channel: unfit(channel) for channel in selection.channels}
-    drops = [Drop(channel.name, reason) for channel in selection.channels if (reason := reasons[channel])]
-    if not drops:
-        return selection
-    zones: list[Zone] = []
-    for zone in selection.zones:
-        kept = tuple(channel for channel in zone.channels if not reasons[channel])
-        if kept:
-            zones.append(Zone(zone.name, kept))
-        else:
-            drops.append(Drop(f"zone {zone.name}", "holds no channel the output carries"))
-    channels = tuple(channel for channel in selection.channels if not reasons[channel])
-    return replace(selection, channels=channels, zones=tuple(zones), drops=(*selection.drops, *drops))
 
 
 def _outside(region: Region, channel: Channel) -> str | None:
