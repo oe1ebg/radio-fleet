@@ -81,6 +81,8 @@ nodes:
       probe=$(git commit-tree -S -m "signing probe" "HEAD^{tree}")
       test "$(git log -1 --format=%G?/%GS "$probe")" = "G/$email" \
         || { echo "signing probe is not signed by $email" >&2; exit 1; }
+      # Remember where the run started, for verify-signer (file in this worktree's git dir).
+      git rev-parse HEAD > "$(git rev-parse --git-path fleet-step-start)"
       echo "commits are signed as $email" >&2
 
   - id: deliver
@@ -118,6 +120,8 @@ nodes:
         $INPUTS.note
 
   # Every commit the run added must carry the automation identity's signature.
+  # The run's commits are the first-parent chain from its start commit to HEAD, so
+  # main commits merged in are not checked and a merged PR still is.
   - id: verify-signer
     depends_on: [deliver]
     bash: |
@@ -125,9 +129,14 @@ nodes:
       field() { python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$FACTORY_SIGNING_CONFIG" "$1"; }
       email=$(field email)
       allowed=$(field allowed_signers)
-      git fetch -q origin main
+      start=$(cat "$(git rev-parse --git-path fleet-step-start)")
+      commits=$(git rev-list --first-parent "$start..HEAD")
+      if [ -z "$commits" ]; then
+        echo "the run added no commits" >&2
+        exit 1
+      fi
       bad=0
-      for c in $(git rev-list origin/main..HEAD); do
+      for c in $commits; do
         got=$(git -c gpg.ssh.allowedSignersFile="$allowed" log -1 --format=%G?/%GS "$c")
         if [ "$got" != "G/$email" ]; then
           echo "not signed by $email: $(git log -1 --format='%h %s' "$c") ($got)" >&2
