@@ -16,7 +16,7 @@ def mcp_row(**values: str) -> dict[str, str]:
 
 
 def mcp_csv(rows: list[dict[str, str]]) -> str:
-    """CSV the way MCP writes it: MCP's own column order and CRLF line ends."""
+    """CSV with MCP's CRLF line ends; the extra columns come first, where MCP puts them last, so normalize must reorder."""
     out = io.StringIO()
     writer = csv.DictWriter(out, fieldnames=list(MCP_EXTRA_COLUMNS) + list(COLUMNS), lineterminator="\r\n")
     writer.writeheader()

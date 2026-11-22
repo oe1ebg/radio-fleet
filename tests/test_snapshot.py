@@ -53,3 +53,28 @@ def test_snapshot_reads_back_into_channels(tmp_path: Path):
 def test_mcp_output_without_a_snapshot_column_is_refused():
     with pytest.raises(snapshot.SnapshotError, match="callsign"):
         snapshot.normalize("name,freq_tx\r\nX,145.0\r\n")
+
+
+def test_rows_of_one_callsign_sort_by_frequency_as_a_number():
+    rows = [mcp_row(callsign="XX0MB", freq_tx=f, fm="True") for f in ("145.0", "1296.1", "50.8")]
+    lines = snapshot.normalize(mcp_csv(rows)).splitlines()[1:]
+    freq_tx = snapshot.COLUMNS.index("freq_tx")
+    assert [line.split(",")[freq_tx] for line in lines] == ["50.8", "145.0", "1296.1"]
+
+
+def test_snapshot_columns_are_the_source_columns_of_the_pinned_mcp():
+    from memory_channels_processor.processor import get_data_source_col_names
+
+    assert snapshot.COLUMNS == tuple(get_data_source_col_names())
+
+
+@pytest.mark.parametrize("cell", [{"fm": "yes"}, {"freq_rx": "fast"}, {"dmr": "True", "dmr_cc": "1.5"}])
+def test_an_unconvertible_cell_is_refused_with_its_callsign(cell: dict[str, str]):
+    row = mcp_row(callsign="XX0BAD", freq_tx="145.0", freq_rx="145.6", fm="True") | cell
+    with pytest.raises(snapshot.SnapshotError, match="XX0BAD"):
+        next(snapshot.channels_from_rows([row]))
+
+
+def test_an_unsortable_frequency_is_refused_with_its_callsign():
+    with pytest.raises(snapshot.SnapshotError, match="XX0BAD.*freq_tx"):
+        snapshot.normalize(mcp_csv([FM_REPEATER, mcp_row(callsign="XX0BAD", freq_tx="?")]))

@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import io
 from collections.abc import Iterable, Iterator, Mapping
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from radio_fleet.model import Channel, Ctcss, Dcs, Mode, Tone
@@ -39,8 +39,7 @@ def normalize(mcp_csv: str) -> str:
     if missing:
         raise SnapshotError(f"MCP output lacks columns: {', '.join(missing)}")
     rows = [tuple(row[c] for c in COLUMNS) for row in reader]
-    callsign, freq_tx = COLUMNS.index("callsign"), COLUMNS.index("freq_tx")
-    rows.sort(key=lambda r: (r[callsign], _decimal_or_zero(r[freq_tx]), r))
+    rows.sort(key=_sort_key)
     out = io.StringIO()
     writer = csv.writer(out, lineterminator="\n")
     writer.writerow(COLUMNS)
@@ -49,9 +48,12 @@ def normalize(mcp_csv: str) -> str:
 
 
 def write(snapshots_dir: Path, source: str, mcp_csv: str) -> Path:
+    """Write the snapshot only when every row converts, so a bad fetch leaves the old snapshot in place."""
+    text = normalize(mcp_csv)
+    list(channels_from_rows(csv.DictReader(io.StringIO(text, newline=""))))
     path = path_for(snapshots_dir, source)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(normalize(mcp_csv).encode("utf-8"))
+    path.write_bytes(text.encode("utf-8"))
     return path
 
 
@@ -61,11 +63,16 @@ def read(path: Path) -> list[Channel]:
 
 
 def channels_from_rows(rows: Iterable[Mapping[str, str]]) -> Iterator[Channel]:
-    """One channel per mode the repeater carries; a row without a mode gives none."""
+    """One channel per mode the repeater carries; a row without a mode gives none.
+
+    FM channels take DCS over CTCSS when a row lists both for one direction.
+    """
     for row in rows:
-        for column, mode in _MODE_COLUMNS:
-            if _bool(row[column]):
-                yield _channel(row, mode)
+        try:
+            channels = [_channel(row, mode) for column, mode in _MODE_COLUMNS if _bool(row[column])]
+        except (ArithmeticError, ValueError) as error:
+            raise SnapshotError(f"row {row['callsign']!r}: {error}") from error
+        yield from channels
 
 
 def _channel(row: Mapping[str, str], mode: Mode) -> Channel:
@@ -101,5 +108,12 @@ def _bool(value: str) -> bool:
     return value == "True"
 
 
-def _decimal_or_zero(value: str) -> Decimal:
-    return Decimal(value) if value else Decimal(0)
+_CALLSIGN, _FREQ_TX = COLUMNS.index("callsign"), COLUMNS.index("freq_tx")
+
+
+def _sort_key(row: tuple[str, ...]) -> tuple[str, Decimal, tuple[str, ...]]:
+    freq_tx = row[_FREQ_TX]
+    try:
+        return row[_CALLSIGN], Decimal(freq_tx) if freq_tx else Decimal(0), row
+    except InvalidOperation:
+        raise SnapshotError(f"row {row[_CALLSIGN]!r}: freq_tx is not a number: {freq_tx!r}") from None
