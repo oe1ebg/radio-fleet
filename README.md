@@ -10,4 +10,6 @@ The radios are AnyTone (qdmr), Baofeng/Retevis (CHIRP), Yaesu (ADMS, jayt) and H
 
 Status: `fleet fetch` snapshots the upstream sources named in `fleet.yaml` (or by `--source`) to `snapshots/` (`--offline` reads the existing snapshots). `fleet select --radio R` prints the channels, zones, drops with their reasons, and applied overrides of one radio from the snapshots and `sources/`. No radio is built yet.
 
-Private repository. Upstream repeater data: ÖVSV, CC BY 4.0.
+Your own radios and lists live in a separate data directory, usually a private repository (`SPEC.md` R13). This repository has only synthetic example data.
+
+Upstream repeater data: ÖVSV, CC BY 4.0.

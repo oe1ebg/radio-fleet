@@ -20,7 +20,7 @@ Each requirement has an acceptance criterion. Tests are data-free: synthetic cha
 
 - **R1 Fetch and snapshot.**
   - Use memory-channels-processor (MCP), pinned in `pyproject.toml`, to read the upstream sources. The first one is `oevsv-repeater-db`; others come through `fleet.yaml`.
-  - Write one snapshot per source to `snapshots/<source>.csv`, sorted by callsign and frequency, with a fixed column order.
+  - Write one snapshot per source to `snapshots/<source>.csv` in the data root (R13), sorted by callsign and frequency, with a fixed column order.
   - Use MCP's CSV output: in MCP 0.2.5 the JSON output fails with the installed pandas.
   - *Accept:* two fetches of the same data give byte-identical snapshots, and `--offline` builds from the snapshot without network.
 - **R2 Channel model.**
@@ -28,7 +28,7 @@ Each requirement has an acceptance criterion. Tests are data-free: synthetic cha
   - A reader turns MCP snapshot rows into channels. MCP's `freq_tx` and `ctcss_tx` are what the radio transmits.
   - *Accept:* a snapshot row for an FM repeater and one for a DMR repeater convert into the expected channels.
 - **R3 Own lists.**
-  - The owner's lists are YAML files in `sources/own/`, one list per file, with name, tags and channels in the R2 model. Talkgroups and RX group lists are named in the list and defined once in `sources/talkgroups.yaml`.
+  - The owner's lists are YAML files in `sources/own/` of the data root (R13), one list per file, with name, tags and channels in the R2 model. Talkgroups and RX group lists are named in the list and defined once in `sources/talkgroups.yaml`.
   - `sources/overrides.yaml` changes upstream channels by callsign. Each entry needs a `reason`.
   - `sources/dmr_templates.yaml` expands one upstream DMR repeater into the owner's standard channels (time slot + talkgroup + RX group, for example `TS1 TG232`, `TS2 TG9`).
   - *Accept:*
@@ -36,7 +36,7 @@ Each requirement has an acceptance criterion. Tests are data-free: synthetic cha
     - an override is applied and reported;
     - a DMR repeater expands to the template's channels.
 - **R4 Radio profiles.**
-  - `fleet.yaml` names every radio, with:
+  - `fleet.yaml` in the data root (R13) names every radio, with:
     - its renderer and base file;
     - its capability: bands with RX and TX limits, modes, channel/zone/scan-list limits, name length;
     - the region: a locator and maximum km, or callsign prefixes;
@@ -93,17 +93,28 @@ Each requirement has an acceptance criterion. Tests are data-free: synthetic cha
   - `fleet publish` copies `build/<radio>/` to `<equipment>/<radio>/generated/<date>/`. It never overwrites another file.
   - `fleet applied <radio>` records the build's digest in `applied.yaml` and prints the git tag command `applied/<radio>/<date>` for the owner.
   - *Accept:* publish refuses an existing target, and applied records the digest.
+- **R13 Data root.**
+  - The owner's data is in one directory, the data root: `fleet.yaml`, `sources/`, `snapshots/`, `bases/`, `applied.yaml` and `build/`.
+  - The data root is `--data DIR`, else the environment variable `FLEET_DATA`, else the current directory. The options that name one path (`--fleet`, `--sources`, `--snapshots`) still win over the data root for that path.
+  - Paths in `fleet.yaml` (bases, tool paths) are relative to the data root.
+  - The owner's data root is a separate, private repository. This repository has only synthetic example data, in `examples/`, which is a valid data root.
+  - A file that `fleet.yaml` names but that does not exist (an own list, a base, a template) is an error that names the file. It is never skipped.
+  - *Accept:*
+    - `fleet select --data examples --radio R` run from another directory gives the same output as `fleet select --radio R` run in `examples/`;
+    - `FLEET_DATA` gives the same result, and `--data` wins over `FLEET_DATA`;
+    - an own list that is named but missing fails with its file name.
 
 ## Rules
 
 - **G1 No radio access.** radio-fleet never talks to a radio, and nothing in it opens a serial or USB port. Writing a file to a radio is the owner's manual step in qdmr, CHIRP, ADMS, jayt or hytera_reverse.
 - **G2 Data policy.**
-  - These may be committed:
-    - own lists;
+  - This repository is public. It has code, tests and synthetic example data (`examples/`), and nothing of the owner's real data: no real own lists, overrides, home locator, DMR ID or base file.
+  - The owner's private data repository (R13) may commit:
+    - own lists, talkgroups, overrides, DMR templates;
     - upstream snapshots (ÖVSV data is CC BY 4.0: keep the source columns);
     - qdmr base files;
-    - `fleet.yaml`.
-  - These are never committed:
+    - `fleet.yaml` and `applied.yaml`.
+  - No repository ever commits:
     - Hytera base files or anything derived from them;
     - radio images;
     - build output;

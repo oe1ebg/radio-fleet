@@ -20,9 +20,10 @@ Python 3.12, uv. Runtime dependencies: memory-channels-processor (git, pinned ta
 
 ## Rules
 
-- **Trace work to the spec.** Every change serves a requirement (`R1`..`R12`, `G1`, `G2`) of `SPEC.md`. Name it in the commit body and the PR. Work that serves none is out of scope: stop and say so.
+- **Trace work to the spec.** Every change serves a requirement (`R1`..`R13`, `G1`, `G2`) of `SPEC.md`. Name it in the commit body and the PR. Work that serves none is out of scope: stop and say so.
 - **G1: never talk to a radio.** No code opens a serial port, a USB device or a radio tool's write command. External tools are called only to export, import, convert or check files.
 - **G2: data policy.**
+  - This repository is public. The owner's real data (own lists, overrides, `fleet.yaml`, qdmr bases, home locator, DMR ID) lives in their private data repository (R13), never here. Example data in `examples/` is synthetic.
   - Never commit:
     - Hytera `.rcdx` files or anything decoded from them;
     - radio images (`.img`, `.rdt`, `.FT3185`, `.FTX-1`, `.ft5d`);
@@ -36,11 +37,10 @@ Python 3.12, uv. Runtime dependencies: memory-channels-processor (git, pinned ta
 
 ## Layout
 
+A data root (R13) has `fleet.yaml`, `sources/`, `snapshots/`, `bases/`, `applied.yaml` and `build/`. Until step 2b moves them, the example data is at the top level.
+
 ```
-fleet.yaml               radios, profiles, tool paths (step 2)
-sources/                 own lists, talkgroups, overrides, DMR templates
-snapshots/               upstream snapshots (committed, so `git diff` shows upstream changes)
-bases/qdmr/              qdmr base configs
+examples/                synthetic data root (step 2b): fleet.yaml, sources/, snapshots/, bases/
 src/radio_fleet/         package; render/ holds one module per output
 tests/                   data-free tests
 .archon/workflows/       the repo's Archon workflow (fleet-step)
