@@ -142,7 +142,7 @@ power_levels: {Max: 25W, High: 25W, Mid: 10W, Low: 5W, Min: 5W}
 | `hytera` | `High`, `Middle`, `Low` | `Max`, `High`: `High`; `Mid`: `Middle`; `Low`, `Min`: `Low` |
 | `ft5d` | none: the FT5D writes no power | |
 
-A value the renderer does not take is refused when `fleet.yaml` is read, with the profile and the key. A level that a channel has and the profile does not map fails the selection, with the channel and its list. A `power` that is not a level, such as `power: 25W`, gives every level that value.
+A value the renderer does not take is refused when `fleet.yaml` is read, with the profile and the key. A level that a channel has and the profile does not map fails the selection, with the channel and its list. A `power` that is not a level, such as `power: 25W`, is the radio's value of every channel; a channel that sets its own level then fails the selection. Make `power` a level and add `power_levels` to use levels.
 
 ## Naming
 
