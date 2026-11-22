@@ -44,6 +44,7 @@ The Hytera command lines run in the data root. A placeholder can be a whole argu
 | `own_lists` | list of strings | no | The own lists, by name, in order. Default: none. |
 | `dmr_template` | string | no | A template of `sources/dmr_templates.yaml`. Default: none. |
 | `zones` | list | no | Zone rules. Default: none. |
+| `scan_lists` | list | qdmr | Scan-list rules. Default: none. Only the `qdmr` renderer takes them. |
 | `power` | string | chirp | The power of every channel that sets none. |
 | `naming` | mapping | no | Name replacements. |
 
@@ -64,9 +65,10 @@ fleet select: fleet.yaml: radios.d168uv.base: no file bases/qdmr/d168uv.yaml
 | `modes` | string or list | yes | Any of `FM`, `DMR`, `C4FM`, `D-STAR`. |
 | `channels` | integer, 1 to 100000 | yes | The number of memory channels. |
 | `name_length` | integer, 1 to 64 | yes | The longest channel name. |
-| `zones` | integer, 0 to 100000 | no, default 0 | The number of zones (banks on the FT5D). |
-| `zone_channels` | integer, 0 to 100000 | no, default 0 | The channels per zone. |
-| `scan_lists` | integer, 0 to 100000 | no, default 0 | Read, but no renderer uses it yet. |
+| `zones` | integer, 0 to 100000 | no, default no limit | The number of zones (banks on the FT5D). |
+| `zone_channels` | integer, 0 to 100000 | no, default no limit | The channels per zone. |
+| `scan_lists` | integer, 0 to 100000 | no, default no limit | The number of scan lists. |
+| `scan_list_channels` | integer, 0 to 100000 | no, default no limit | The channels per scan list. |
 
 Selection drops a channel when:
 
@@ -86,9 +88,9 @@ Exactly one of:
 
 The region applies to upstream channels only, before overrides and the DMR template.
 
-### `zones`
+### `zones` and `scan_lists`
 
-A list of rules. Each rule makes one zone (one bank on the FT5D), in list order.
+Two lists of rules. Each rule of `zones` makes one zone (one bank on the FT5D), each rule of `scan_lists` one scan list, in list order. Both take the same keys.
 
 | Key | Type | Meaning |
 |---|---|---|
@@ -98,16 +100,17 @@ A list of rules. Each rule makes one zone (one bank on the FT5D), in list order.
 | `source` | string or list | The channel's source is one of these: an own list name or an upstream source. |
 | `tag` | string or list | The channel has at least one of these tags. |
 | `channel` | string or list | The channel's name matches one of these patterns. `*` matches any text and `?` one character; case counts. |
+| `base_channel` | string or list | `qdmr` only. Hand-made channels of the base, by their exact name. They come first, in this order. |
 
-A channel joins a zone when it meets every key that the rule has. A rule with only a `name` takes every channel. The `channel` patterns match the name after `naming` and the cut to `name_length`.
+A channel joins a zone or scan list when it meets every key that the rule has. A rule with only a `name` takes every channel; a rule with only a `name` and `base_channel` takes only those base channels. The `channel` patterns match the name after `naming` and the cut to `name_length`. A `base_channel` name that no hand-made channel of the base has, or more than one has, fails the build: `zone DMR: no hand-made channel named 'Hotspot' in the base`.
 
-Zone drops:
+Drops, where KIND is `zone` or `scan list`:
 
-- `zone NAME: matches no channel`
-- `zone NAME: zone limit of N reached`, when `capability.zones` zones exist already
-- `CHANNEL: not in zone NAME: it holds N channels at most`, for the channels beyond `capability.zone_channels`
+- `KIND NAME: matches no channel`, for a rule that takes no channel and has no `base_channel`
+- `KIND NAME: KIND limit of N reached`, when `capability.zones` zones or `capability.scan_lists` scan lists exist already
+- `CHANNEL: not in KIND NAME: it holds N channels at most`, for the channels beyond `capability.zone_channels` or `capability.scan_list_channels`, base channels counted first
 
-A channel that a zone does not take stays in the radio.
+A limit that is not given is no limit. A channel that a zone or scan list does not take stays in the radio.
 
 ### `power`
 
@@ -133,12 +136,12 @@ naming: {replace: {" TS1 ": " 1 ", " TS2 ": " 2 "}}
 
 ## Renderers
 
-| Renderer | Carries | Needs | Uses zones |
-|---|---|---|---|
-| `qdmr` | FM, DMR | `base`, `dmrconf_radio`, dmrconf | yes, as qdmr zones |
-| `chirp` | FM | `power` in watts | no |
-| `ft5d` | FM, C4FM | memory-channels-processor (installed with radio-fleet) | yes, as banks 1 to 24 |
-| `jayt` | FM, FT-3185 only | `base`, `tools.jayt` | no |
-| `hytera` | FM, DMR | `base`, `factory`, `tools.hytera` | yes |
+| Renderer | Carries | Needs | Uses zones | Uses scan lists |
+|---|---|---|---|---|
+| `qdmr` | FM, DMR | `base`, `dmrconf_radio`, dmrconf | yes, as qdmr zones | yes, as qdmr scan lists; each generated channel refers to the first one that takes it |
+| `chirp` | FM | `power` in watts | no | no |
+| `ft5d` | FM, C4FM | memory-channels-processor (installed with radio-fleet) | yes, as banks 1 to 24 | no |
+| `jayt` | FM, FT-3185 only | `base`, `tools.jayt` | no | no |
+| `hytera` | FM, DMR | `base`, `factory`, `tools.hytera` | yes | no |
 
 A channel of a mode that the renderer does not carry fails the build. Keep `capability.modes` within the renderer's modes, so that selection drops such channels instead.

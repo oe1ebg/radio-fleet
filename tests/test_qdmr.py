@@ -6,13 +6,13 @@ import pytest
 from radio_fleet import fleet, snapshot, sources
 from radio_fleet.model import Channel, Ctcss, Dcs, Mode
 from radio_fleet.render import qdmr
-from radio_fleet.selection import Selection, Zone, select
+from radio_fleet.selection import Group, Selection, select
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
-# Hand-made objects with values YAML 1.1 reads differently than qdmr (Off, No, 023), a group call
-# contact for TG9 to reuse, a private call with a talkgroup's number, and generated objects of an
-# earlier build.
+# Hand-made objects with values YAML 1.1 reads differently than qdmr (Off, No, 023), qdmr's own tags,
+# a channel that the example's DMR zone and scan list take by name, a group call contact for TG9 to
+# reuse, a private call with a talkgroup's number, and generated objects of an earlier build.
 BASE = """\
 version: 0.12.0
 settings: {defaultID: id1, power: High}
@@ -26,6 +26,7 @@ groupLists:
   - {id: grp1, name: Local, contacts: [cont1]}
 channels:
   - fm: {id: ch1, name: No, rxFrequency: 145.500 MHz, txFrequency: 145.500 MHz, vox: Off, rxTone: {dcs: 023}}
+  - dmr: {id: ch2, name: Hotspot, rxFrequency: 433.6125 MHz, txFrequency: 433.6125 MHz, timeout: !default ""}
   - fm: {id: gen_ch9, name: Old, rxFrequency: 145.6 MHz, txFrequency: 145.6 MHz}
 positioning:
   - dmr: {id: aprs1, name: DMR APRS, period: 300 s, contact: cont2}
@@ -33,6 +34,7 @@ zones:
   - {id: zone1, name: Hand, A: [ch1]}
   - {id: gen_zone7, name: Old, A: [gen_ch9]}
 scanLists:
+  - {id: scan1, name: Hand, primary: !selected "", channels: [ch1]}
   - {id: gen_scan1, name: Old, channels: [gen_ch9]}
 """
 
@@ -78,16 +80,59 @@ def test_hand_made_objects_and_settings_are_unchanged() -> None:
     assert "vox: 'Off'" in out
     assert "dcs: '023'" in out
     assert "rxFrequency: 145.500 MHz" in out
+    assert "timeout: !default ''" in out
+    assert "primary: !selected ''" in out
 
 
 def test_a_rebuild_replaces_exactly_the_generated_objects() -> None:
     selection, own = example_selection()
     rendered = qdmr.load(qdmr.render(selection, own, BASE))
-    ids = {key: [object_id(item) for item in items(rendered, key)] for key in ("contacts", "channels", "zones")}
+    keys = ("contacts", "channels", "zones", "scanLists")
+    ids = {key: [object_id(item) for item in items(rendered, key)] for key in keys}
     assert ids["contacts"] == ["cont1", "cont2", "gen_tg99", "gen_tg232"]
-    assert ids["channels"] == ["ch1", *(f"gen_ch{i}" for i in range(1, len(selection.channels) + 1))]
+    assert ids["channels"] == ["ch1", "ch2", *(f"gen_ch{i}" for i in range(1, len(selection.channels) + 1))]
     assert ids["zones"] == ["zone1", *(f"gen_zone{i}" for i in range(1, len(selection.zones) + 1))]
-    assert items(rendered, "scanLists") == []
+    assert ids["scanLists"] == ["scan1", "gen_scan1", "gen_scan2"]
+
+
+def test_scan_lists_take_hand_made_channels_by_name_and_channels_refer_to_their_first_scan_list() -> None:
+    selection, own = example_selection()
+    rendered = qdmr.load(qdmr.render(selection, own, BASE))
+    names = {object_id(item): next(iter(item.values()))["name"] for item in items(rendered, "channels")}
+    scan_lists = {scan["name"]: [names[i] for i in scan["channels"]] for scan in items(rendered, "scanLists")}
+    assert scan_lists == {
+        "Hand": ["No"],
+        "FM": ["2m Call", "70cm Call", "XX1AA", "XX1CC", "XX3DD"],
+        "DMR": ["Hotspot", "DMR Simplex", "XX1BB 1 TG232", "XX1BB 2 TG9"],
+    }
+    zones = {zone["name"]: [names[i] for i in zone["A"]] for zone in items(rendered, "zones")}
+    assert zones["DMR"] == ["Hotspot", "DMR Simplex", "XX1BB 1 TG232", "XX1BB 2 TG9"]
+    refs = {inner["name"]: inner.get("scanListRef") for item in items(rendered, "channels") for inner in item.values()}
+    assert refs == {
+        "No": None,
+        "Hotspot": None,
+        "2m Call": "gen_scan1",
+        "70cm Call": "gen_scan1",
+        "DMR Simplex": "gen_scan2",
+        "XX1AA": "gen_scan1",
+        "XX1BB 1 TG232": "gen_scan2",
+        "XX1BB 2 TG9": "gen_scan2",
+        "XX1CC": "gen_scan1",
+        "XX3DD": "gen_scan1",
+    }
+
+
+@pytest.mark.parametrize(
+    ("base", "message"),
+    [
+        (BASE.replace("name: Hotspot", "name: Hot"), "zone DMR: no hand-made channel named 'Hotspot' in the base"),
+        (BASE.replace("name: No", "name: Hotspot"), "zone DMR: 2 hand-made channels named 'Hotspot' in the base"),
+    ],
+)
+def test_a_base_channel_that_names_no_single_hand_made_channel_is_refused(base: str, message: str) -> None:
+    selection, own = example_selection()
+    with pytest.raises(qdmr.RenderError, match=message):
+        qdmr.render(selection, own, base)
 
 
 def test_an_existing_group_call_contact_with_the_same_number_is_reused() -> None:
@@ -100,10 +145,19 @@ def test_an_existing_group_call_contact_with_the_same_number_is_reused() -> None
     assert group_lists["Austria"] == {"id": "gen_grp1", "name": "Austria", "contacts": ["gen_tg232", "cont1"]}
 
 
+def test_a_channel_in_two_scan_lists_refers_to_the_first() -> None:
+    selection, own = example_selection()
+    channels = selection.channels[:2]
+    scan_lists = (Group("One", channels[1:]), Group("Both", channels))
+    rendered = qdmr.load(qdmr.render(Selection(selection.radio, channels, (), scan_lists, (), ()), own, BASE))
+    refs = [inner.get("scanListRef") for item in items(rendered, "channels") for inner in item.values()]
+    assert refs[-2:] == ["gen_scan2", "gen_scan1"]
+
+
 def render_channels(*channels: Channel) -> list[dict[str, Any]]:
     selection, own = example_selection()
-    zone = Zone("All", channels)
-    rendered = qdmr.load(qdmr.render(Selection(selection.radio, channels, (zone,), (), ()), own, BASE))
+    zone = Group("All", channels)
+    rendered = qdmr.load(qdmr.render(Selection(selection.radio, channels, (zone,), (), (), ()), own, BASE))
     assert items(rendered, "zones")[-1] == {
         "id": "gen_zone1",
         "name": "All",

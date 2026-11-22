@@ -118,7 +118,7 @@ def test_select_prints_the_channels_drops_and_overrides(tmp_path: Path, capsys: 
     args = ["--fleet", str(tmp_path / "fleet.yaml"), "--snapshots", str(tmp_path / "snapshots")]
     assert main(["select", "--radio", "synthetic", "--sources", str(tmp_path / "sources"), *args]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("synthetic (Synthetic 2m FM): 1 channels, 0 zones\n")
+    assert out.startswith("synthetic (Synthetic 2m FM): 1 channels, 0 zones, 0 scan lists\n")
     assert re.search(r"XX0FM +RX 145.61250 TX 145.00000 FM tone TX CTCSS 77 tone RX CTCSS 88.5", out)
     assert "  XX0DM: mode DMR not supported\n" in out
     assert "  XX0FM FM: tone_tx=CTCSS 77, rx_hz=145.61250 MHz, bandwidth_hz=12.5 kHz (synthetic reason)\n" in out

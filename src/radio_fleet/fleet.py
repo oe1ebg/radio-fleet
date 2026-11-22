@@ -40,12 +40,15 @@ class Band:
 
 @dataclass(frozen=True, slots=True)
 class Capability:
+    """`None` is no limit."""
+
     bands: tuple[Band, ...]
     modes: frozenset[Mode]
     channels: int
-    zones: int
-    zone_channels: int
-    scan_lists: int
+    zones: int | None
+    zone_channels: int | None
+    scan_lists: int | None
+    scan_list_channels: int | None
     name_length: int
 
     def band_of(self, channel: Channel) -> Band | None:
@@ -68,9 +71,10 @@ Region = DistanceRegion | PrefixRegion
 
 
 @dataclass(frozen=True, slots=True)
-class ZoneRule:
-    """A zone (or bank) and the channels it takes. Each criterion lists the values it accepts;
-    a channel joins when it meets every criterion the rule has."""
+class GroupRule:
+    """A zone (or bank) or a scan list and the channels it takes. Each criterion lists the values it accepts;
+    a channel joins when it meets every criterion the rule has. `base_channels` names hand-made channels of
+    the base that join first; a rule with base channels and no criterion takes no other channel."""
 
     name: str
     modes: frozenset[Mode] = frozenset()
@@ -78,8 +82,11 @@ class ZoneRule:
     sources: frozenset[str] = frozenset()
     tags: frozenset[str] = frozenset()
     channels: tuple[str, ...] = ()
+    base_channels: tuple[str, ...] = ()
 
     def matches(self, channel: Channel, band: Band | None) -> bool:
+        if self.base_channels and not (self.modes or self.bands or self.sources or self.tags or self.channels):
+            return False
         return (
             (not self.modes or channel.mode in self.modes)
             and (not self.bands or (band is not None and band.name in self.bands))
@@ -101,7 +108,8 @@ class Radio:
     region: Region
     own_lists: tuple[str, ...]
     dmr_template: str | None
-    zones: tuple[ZoneRule, ...]
+    zones: tuple[GroupRule, ...]
+    scan_lists: tuple[GroupRule, ...]
     power: str | None
     name_replacements: tuple[tuple[str, str], ...]
 
@@ -193,7 +201,7 @@ def _command(node: Node, command: str) -> tuple[str, ...]:
 def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
     fields = node.fields(
         ["model", "renderer", "capability", "region"],
-        ["base", "dmrconf_radio", "factory", "own_lists", "dmr_template", "zones", "power", "naming"],
+        ["base", "dmrconf_radio", "factory", "own_lists", "dmr_template", "zones", "scan_lists", "power", "naming"],
     )
     capability = _capability(fields["capability"])
     try:
@@ -204,6 +212,12 @@ def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
         raise fields["dmrconf_radio"].error("only the qdmr renderer takes a dmrconf radio")
     if renderer is not Renderer.HYTERA and "factory" in fields:
         raise fields["factory"].error("only the hytera renderer takes a factory image")
+    if renderer is not Renderer.QDMR and "scan_lists" in fields:
+        raise fields["scan_lists"].error("only the qdmr renderer takes scan lists")
+    rules = {
+        key: tuple(_group_rule(item, capability, renderer) for item in fields[key].items()) if key in fields else ()
+        for key in ("zones", "scan_lists")
+    }
     return Radio(
         id=radio_id,
         model=fields["model"].text(),
@@ -215,22 +229,25 @@ def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
         region=_region(fields["region"]),
         own_lists=fields["own_lists"].texts() if "own_lists" in fields else (),
         dmr_template=fields["dmr_template"].text() if "dmr_template" in fields else None,
-        zones=tuple(_zone_rule(item, capability) for item in fields["zones"].items()) if "zones" in fields else (),
+        zones=rules["zones"],
+        scan_lists=rules["scan_lists"],
         power=fields["power"].text() if "power" in fields else None,
         name_replacements=_naming(fields["naming"]) if "naming" in fields else (),
     )
 
 
 def _capability(node: Node) -> Capability:
-    fields = node.fields(["bands", "modes", "channels", "name_length"], ["zones", "zone_channels", "scan_lists"])
+    fields = node.fields(
+        ["bands", "modes", "channels", "name_length"], ["zones", "zone_channels", "scan_lists", "scan_list_channels"]
+    )
     bands = tuple(_band(item) for item in fields["bands"].items())
     if not bands:
         raise fields["bands"].error("name at least one band")
     if len({band.name for band in bands}) != len(bands):
         raise fields["bands"].error("band names must be unique")
 
-    def limit(key: str) -> int:
-        return fields[key].integer(0, 100_000) if key in fields else 0
+    def limit(key: str) -> int | None:
+        return fields[key].integer(0, 100_000) if key in fields else None
 
     return Capability(
         bands=bands,
@@ -239,6 +256,7 @@ def _capability(node: Node) -> Capability:
         zones=limit("zones"),
         zone_channels=limit("zone_channels"),
         scan_lists=limit("scan_lists"),
+        scan_list_channels=limit("scan_list_channels"),
         name_length=fields["name_length"].integer(1, 64),
     )
 
@@ -276,8 +294,10 @@ def _region(node: Node) -> Region:
     raise node.error("a region is either {locator, max_km} or {prefixes}")
 
 
-def _zone_rule(node: Node, capability: Capability) -> ZoneRule:
-    fields = node.fields(["name"], ["mode", "band", "source", "tag", "channel"])
+def _group_rule(node: Node, capability: Capability, renderer: Renderer) -> GroupRule:
+    fields = node.fields(["name"], ["mode", "band", "source", "tag", "channel", "base_channel"])
+    if renderer is not Renderer.QDMR and "base_channel" in fields:
+        raise fields["base_channel"].error("only the qdmr renderer takes base channels")
 
     def values(key: str) -> tuple[str, ...]:
         if key not in fields:
@@ -289,13 +309,14 @@ def _zone_rule(node: Node, capability: Capability) -> ZoneRule:
     unknown = bands - {band.name for band in capability.bands}
     if unknown:
         raise fields["band"].error(f"no band {sorted(unknown)[0]!r} in the capability")
-    return ZoneRule(
+    return GroupRule(
         name=fields["name"].text(),
         modes=frozenset(_modes(fields["mode"])) if "mode" in fields else frozenset(),
         bands=bands,
         sources=frozenset(values("source")),
         tags=frozenset(values("tag")),
         channels=values("channel"),
+        base_channels=values("base_channel"),
     )
 
 

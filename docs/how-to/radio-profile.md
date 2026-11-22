@@ -1,6 +1,6 @@
 # Add a radio profile
 
-Each radio has a profile under `radios` in `fleet.yaml`. The profile says which file to build, what the radio can carry, which channels it gets and how to sort them into zones. Every key is in the [fleet.yaml reference](../reference/fleet-yaml.md).
+Each radio has a profile under `radios` in `fleet.yaml`. The profile says which file to build, what the radio can carry, which channels it gets and how to sort them into zones and scan lists. Every key is in the [fleet.yaml reference](../reference/fleet-yaml.md).
 
 This guide adds a second Retevis RT95 that carries the repeaters within 60 km of a locator.
 
@@ -31,7 +31,7 @@ This guide adds a second Retevis RT95 that carries the repeaters within 60 km of
    ```
 
    ```text
-   rt95-car (Retevis RT95): 5 channels, 0 zones
+   rt95-car (Retevis RT95): 5 channels, 0 zones, 0 scan lists
      2m C             RX 145.50000 TX 145.50000 FM power 25W [simplex]
      70cm C           RX 433.50000 TX 433.50000 FM power 25W [simplex]
      XX1AA            RX 145.60000 TX 145.00000 FM tone TX CTCSS 88.5 tone RX CTCSS 88.5 power 25W [oevsv-repeater-db]
@@ -76,7 +76,7 @@ Put only modes in `capability.modes` that the renderer carries. A channel of a m
 - `bands`: each band has an RX range and, for transmit, a TX range, in MHz. A channel is dropped when its RX frequency is in no RX range, or when its TX frequency is in no TX range. Set the TX ranges to the amateur bands you may transmit on.
 - `channels`: the memory count. Channels beyond it are dropped with `channel limit of N reached`.
 - `name_length`: names are cut to this length.
-- `zones` and `zone_channels`: the number of zones and the channels per zone. Both are 0 when you leave them out. Set both when the profile has zone rules.
+- `zones` and `zone_channels`: the number of zones and the channels per zone. `scan_lists` and `scan_list_channels`: the number of scan lists and the channels per scan list. A limit that you leave out is no limit. Set the radio's limits when the profile has zone or scan-list rules, so that selection drops what the radio cannot hold.
 
 ## Region
 
@@ -85,7 +85,7 @@ The region selects upstream channels. It does not apply to own lists. Use one of
 - `{locator: JJ00mm, max_km: 60}`: the repeaters within 60 km of the centre of the Maidenhead locator. A repeater without a position in the snapshot is dropped.
 - `{prefixes: [XX1, XX3]}`: the repeaters whose callsign starts with one of the prefixes.
 
-## Zones
+## Zones and scan lists
 
 A zone rule selects channels by `mode`, `band`, `source`, `tag` and `channel` (a name pattern such as `"XX1*"`). Each key takes one value or a list. A channel joins a zone when it meets every key of the rule. One channel can be in several zones.
 
@@ -97,6 +97,18 @@ zones:
 ```
 
 The `channel` pattern matches the name after `naming` and after the cut to `name_length`. A rule that matches no channel is dropped with `matches no channel`. The renderers use zones as follows: qdmr and Hytera write zones, the FT5D writes banks 1 to 24, and the CHIRP and jayt renderers do not use them.
+
+Scan-list rules under `scan_lists` take the same keys. Only the qdmr renderer takes scan-list rules; another renderer refuses them when `fleet.yaml` is read. Each generated channel refers to the first scan list that takes it, so the radio scans that list when you start a scan on the channel.
+
+```yaml
+scan_lists:
+  - {name: FM, mode: FM}
+  - {name: DMR, mode: DMR, base_channel: Hotspot}
+```
+
+With the qdmr renderer, `base_channel` adds hand-made channels of the base to a zone or scan list by their exact name, before the generated channels. A rule with only a `name` and `base_channel` takes only those channels. The name must belong to exactly one hand-made channel of the base, or the build fails.
+
+Selection keeps at most `capability.zones` zones and `capability.scan_lists` scan lists, and at most `zone_channels` or `scan_list_channels` channels in each; every zone, scan list or member beyond a limit is a drop with its reason.
 
 ## Power
 

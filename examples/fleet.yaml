@@ -3,12 +3,14 @@
 # Frequencies in MHz.
 #
 # capability: what the radio can carry. TX limits are the Austrian amateur bands, so a
-#   channel that transmits outside them is dropped. Limits that are left out are 0.
-#   The channel, zone and name limits follow the manufacturers' data; the renderer
-#   step of each radio checks them against its tool.
+#   channel that transmits outside them is dropped. A zone or scan-list limit that is
+#   left out is no limit. The channel, zone, scan-list and name limits follow the
+#   manufacturers' data; the renderer step of each radio checks them against its tool.
 # region: {locator, max_km} or {prefixes}; it applies to upstream channels only.
-# zones: zone (or bank) rules. A rule's keys mode, band, source, tag and channel (a
-#   name pattern) take one value or a list; a channel joins when it meets every key.
+# zones, scan_lists: zone (or bank) and scan-list rules. A rule's keys mode, band,
+#   source, tag and channel (a name pattern) take one value or a list; a channel joins
+#   when it meets every key. qdmr only: base_channel names hand-made channels of the
+#   base that join first. Only the qdmr renderer writes scan lists.
 # base: the renderer's base file, relative to the data root; a base that is named but
 #   missing is an error. jayt and Hytera base files never enter a repository; their
 #   renderer steps say how they are given.
@@ -58,6 +60,7 @@ radios:
       zones: 250
       zone_channels: 250
       scan_lists: 250
+      scan_list_channels: 50
       name_length: 16
     region: {locator: JJ00mm, max_km: 80}
     own_lists: [simplex]
@@ -66,7 +69,10 @@ radios:
       - {name: Simplex, source: simplex}
       - {name: FM 2m, mode: FM, band: 2m}
       - {name: FM 70cm, mode: FM, band: 70cm}
-      - {name: DMR, mode: DMR}
+      - {name: DMR, mode: DMR, base_channel: Hotspot}
+    scan_lists: &dmr_scan_lists
+      - {name: FM, mode: FM}
+      - {name: DMR, mode: DMR, base_channel: Hotspot}
     power: High
     naming: {replace: {" TS1 ": " 1 ", " TS2 ": " 2 "}}
 
@@ -80,6 +86,7 @@ radios:
     own_lists: [simplex]
     dmr_template: standard
     zones: *dmr_zones
+    scan_lists: *dmr_scan_lists
     power: High
     naming: {replace: {" TS1 ": " 1 ", " TS2 ": " 2 "}}
 

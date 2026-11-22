@@ -17,7 +17,7 @@ from radio_fleet.dmrconf import CheckError
 from radio_fleet.hytera_tool import HyteraCli
 from radio_fleet.model import Channel, Ctcss, Mode
 from radio_fleet.render import hytera
-from radio_fleet.selection import Selection, Zone, select
+from radio_fleet.selection import Group, Selection, select
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
@@ -220,8 +220,8 @@ def test_everything_but_the_edited_tables_is_unchanged() -> None:
 def test_a_member_and_a_tone_the_base_already_has_are_kept() -> None:
     selection, own = example_selection()
     fm = Channel("Hand FM", 446_006_250, 446_006_250, Mode.FM, tone_rx=Ctcss(88.5), bandwidth_hz=12_500)
-    zone = Zone("FM", (fm,))
-    out = hytera.render(Selection(selection.radio, (fm,), (zone,), (), ()), own, EXPORT)
+    zone = Group("FM", (fm,))
+    out = hytera.render(Selection(selection.radio, (fm,), (zone,), (), (), ()), own, EXPORT)
     entry = tables(out)["analog_channels"][0]
     assert entry["settings"] == {
         "channel_spacing": "12.5",
@@ -251,7 +251,7 @@ def test_a_channel_the_file_cannot_take_is_refused(channels: tuple[Channel, ...]
     selection, own = example_selection()
     export = EXPORT.replace("name: Person", "name: TG232")
     with pytest.raises(hytera.RenderError, match=message):
-        hytera.render(Selection(selection.radio, channels, (), (), ()), own, export)
+        hytera.render(Selection(selection.radio, channels, (), (), (), ()), own, export)
 
 
 @pytest.mark.parametrize(

@@ -1,4 +1,5 @@
-"""Selection (R4): the channels and zones one radio carries, and every channel it cannot carry, with the reason."""
+"""Selection (R4): the channels, zones and scan lists one radio carries, and every channel it cannot carry, with
+the reason."""
 
 from __future__ import annotations
 
@@ -6,30 +7,35 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
 from radio_fleet import geo
-from radio_fleet.fleet import Capability, DistanceRegion, Radio, Region
+from radio_fleet.fleet import Capability, DistanceRegion, GroupRule, Radio, Region
 from radio_fleet.model import Channel
 from radio_fleet.sources import AppliedOverride, Sources, apply_overrides, expand_dmr
 
 
 @dataclass(frozen=True, slots=True)
 class Drop:
-    """A channel the radio does not carry, a channel a zone does not take, or a zone the radio does not get."""
+    """A channel the radio does not carry, a channel a zone or scan list does not take, or a zone or scan list
+    the radio does not get."""
 
     name: str
     reason: str
 
 
 @dataclass(frozen=True, slots=True)
-class Zone:
+class Group:
+    """A zone or a scan list. Its members are the hand-made channels of the base, by name, then `channels`."""
+
     name: str
     channels: tuple[Channel, ...]
+    base_channels: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
 class Selection:
     radio: Radio
     channels: tuple[Channel, ...]
-    zones: tuple[Zone, ...]
+    zones: tuple[Group, ...]
+    scan_lists: tuple[Group, ...]
     drops: tuple[Drop, ...]
     overrides: tuple[AppliedOverride, ...]
 
@@ -62,7 +68,11 @@ def select(radio: Radio, upstream: Sequence[Channel], sources: Sources) -> Selec
             drops.append(Drop(channel.name, reason))
         else:
             kept.append(_named(radio, channel))
-    return Selection(radio, tuple(kept), _zones(radio, kept, drops), tuple(drops), tuple(applied))
+    zones = _groups("zone", radio.zones, capability.zones, capability.zone_channels, capability, kept, drops)
+    scan_lists = _groups(
+        "scan list", radio.scan_lists, capability.scan_lists, capability.scan_list_channels, capability, kept, drops
+    )
+    return Selection(radio, tuple(kept), zones, scan_lists, tuple(drops), tuple(applied))
 
 
 def _outside(region: Region, channel: Channel) -> str | None:
@@ -95,23 +105,32 @@ def _named(radio: Radio, channel: Channel) -> Channel:
     return replace(channel, name=name, power=power)
 
 
-def _zones(radio: Radio, channels: Sequence[Channel], drops: list[Drop]) -> tuple[Zone, ...]:
-    capability = radio.capability
-    zones: list[Zone] = []
-    for rule in radio.zones:
+def _groups(
+    kind: str,
+    rules: Sequence[GroupRule],
+    limit: int | None,
+    member_limit: int | None,
+    capability: Capability,
+    channels: Sequence[Channel],
+    drops: list[Drop],
+) -> tuple[Group, ...]:
+    """The zones or scan lists of the rules; a limit of `None` is no limit."""
+    groups: list[Group] = []
+    for rule in rules:
         members = [channel for channel in channels if rule.matches(channel, capability.band_of(channel))]
-        if not members:
-            drops.append(Drop(f"zone {rule.name}", "matches no channel"))
+        if not members and not rule.base_channels:
+            drops.append(Drop(f"{kind} {rule.name}", "matches no channel"))
             continue
-        if len(zones) == capability.zones:
-            drops.append(Drop(f"zone {rule.name}", f"zone limit of {capability.zones} reached"))
+        if len(groups) == limit:
+            drops.append(Drop(f"{kind} {rule.name}", f"{kind} limit of {limit} reached"))
             continue
-        limit = capability.zone_channels
-        drops.extend(
-            Drop(c.name, f"not in zone {rule.name}: it holds {limit} channels at most") for c in members[limit:]
-        )
-        zones.append(Zone(rule.name, tuple(members[:limit])))
-    return tuple(zones)
+        base, generated = list(rule.base_channels), [channel.name for channel in members]
+        if member_limit is not None:
+            reason = f"not in {kind} {rule.name}: it holds {member_limit} channels at most"
+            drops.extend(Drop(name, reason) for name in [*base, *generated][member_limit:])
+            base, members = base[:member_limit], members[: max(member_limit - len(base), 0)]
+        groups.append(Group(rule.name, tuple(members), tuple(base)))
+    return tuple(groups)
 
 
 def mhz(hz: int) -> str:
