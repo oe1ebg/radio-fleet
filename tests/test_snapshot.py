@@ -96,3 +96,14 @@ def test_an_unconvertible_cell_is_refused_with_its_callsign(cell: dict[str, str]
 def test_an_unsortable_frequency_is_refused_with_its_callsign() -> None:
     with pytest.raises(snapshot.SnapshotError, match=r"XX0BAD.*freq_tx"):
         snapshot.normalize(mcp_csv([FM_REPEATER, mcp_row(callsign="XX0BAD", freq_tx="?")]))
+
+
+def test_rows_with_equal_callsign_and_frequency_sort_the_same_in_any_input_order() -> None:
+    fm = mcp_row(callsign="XX0MM", freq_tx="438.0", freq_rx="430.4", fm="True")
+    dmr = mcp_row(callsign="XX0MM", freq_tx="438.0", freq_rx="430.4", dmr="True", dmr_cc="1")
+    assert snapshot.normalize(mcp_csv([fm, dmr])) == snapshot.normalize(mcp_csv([dmr, fm]))
+
+
+def test_dcs_wins_over_ctcss_on_the_same_side() -> None:
+    row = mcp_row(callsign="XX0TN", freq_tx="145.0", freq_rx="145.6", fm="True", ctcss_tx="88.5", dtcs_tx="23")
+    assert next(snapshot.channels_from_rows([row])).tone_tx == Dcs(23)
