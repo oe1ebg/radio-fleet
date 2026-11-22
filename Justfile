@@ -4,6 +4,7 @@ ci:
     uv run ruff check
     uv run ruff format --check
     uv run mypy
+    uv run zizmor --offline .github/workflows
     uv run pytest -q
 
 test:
