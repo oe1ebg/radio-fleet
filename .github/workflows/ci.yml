@@ -26,6 +26,22 @@ jobs:
       - run: uv run zizmor --offline .github/workflows
       - run: uv run pytest -q
 
+  # zizmor with its online audits (known-vulnerable actions, impostor commits,
+  # ref confusion), which `--offline` in the test job and `just ci` skip. Uses the
+  # job's read-only token; findings become annotations on the PR.
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: uv sync --locked --only-dev
+      - run: uv run --no-sync zizmor --format github --persona pedantic .github/workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   # Tests marked `dmrconf` against qdmr 0.15 (R5, R10). No Ubuntu LTS ships
   # qdmr 0.15 yet; Ubuntu 26.10 ships 0.15.1, so this job runs in that container.
   # Same commands as `just test-dmrconf`.
