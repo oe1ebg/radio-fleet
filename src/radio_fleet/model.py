@@ -27,6 +27,12 @@ Tone = Ctcss | Dcs
 
 
 @dataclass(frozen=True, slots=True)
+class Position:
+    lat: float
+    lon: float
+
+
+@dataclass(frozen=True, slots=True)
 class Channel:
     """One memory channel. `tx_hz` and `tone_tx` are what the radio transmits."""
 
@@ -44,3 +50,4 @@ class Channel:
     power: str | None = None
     tags: tuple[str, ...] = ()
     source: str = ""
+    position: Position | None = None

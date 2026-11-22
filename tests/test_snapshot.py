@@ -4,7 +4,7 @@ import pytest
 from conftest import DMR_REPEATER, FM_REPEATER, mcp_csv, mcp_row
 
 from radio_fleet import snapshot
-from radio_fleet.model import Channel, Ctcss, Dcs, Mode
+from radio_fleet.model import Channel, Ctcss, Dcs, Mode, Position
 
 
 def test_fm_repeater_row_converts() -> None:
@@ -107,3 +107,27 @@ def test_rows_with_equal_callsign_and_frequency_sort_the_same_in_any_input_order
 def test_dcs_wins_over_ctcss_on_the_same_side() -> None:
     row = mcp_row(callsign="XX0TN", freq_tx="145.0", freq_rx="145.6", fm="True", ctcss_tx="88.5", dtcs_tx="23")
     assert next(snapshot.channels_from_rows([row])).tone_tx == Dcs(23)
+
+
+@pytest.mark.parametrize("freq_tx", ["NaN", "sNaN", "Infinity"])
+def test_a_frequency_that_is_not_a_number_is_refused_with_its_callsign(freq_tx: str) -> None:
+    with pytest.raises(snapshot.SnapshotError, match=r"XX0BAD.*freq_tx"):
+        snapshot.normalize(mcp_csv([FM_REPEATER, mcp_row(callsign="XX0BAD", freq_tx=freq_tx)]))
+
+
+def test_a_snapshot_without_a_mode_column_is_refused(tmp_path: Path) -> None:
+    path = snapshot.write(tmp_path, "synthetic-db", mcp_csv([FM_REPEATER]))
+    header, *rows = path.read_text().splitlines()
+    dmr = header.split(",").index("dmr")
+    path.write_text(
+        "\n".join(",".join(c for i, c in enumerate(line.split(",")) if i != dmr) for line in [header, *rows])
+    )
+    with pytest.raises(snapshot.SnapshotError, match=r"lacks columns: dmr"):
+        snapshot.read(path)
+
+
+def test_a_row_position_reads_from_lat_and_long() -> None:
+    row = FM_REPEATER | {"lat": "48.2", "long": "16.4"}
+    assert next(snapshot.channels_from_rows([row])).position == Position(48.2, 16.4)
+    with pytest.raises(snapshot.SnapshotError, match=r"XX0FM.*out of range"):
+        next(snapshot.channels_from_rows([FM_REPEATER | {"lat": "91", "long": "16.4"}]))

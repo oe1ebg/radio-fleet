@@ -1,0 +1,175 @@
+# The owner's radios (R4). Frequencies in MHz.
+#
+# capability: what the radio can carry. TX limits are the Austrian amateur bands, so a
+#   channel that transmits outside them is dropped. Limits that are left out are 0.
+#   The channel, zone and name limits follow the manufacturers' data; the renderer
+#   step of each radio checks them against its tool.
+# region: {locator, max_km} or {prefixes}; it applies to upstream channels only.
+# zones: zone (or bank) rules. A rule's keys mode, band, source, tag and channel (a
+#   name pattern) take one value or a list; a channel joins when it meets every key.
+# base: the renderer's base file. qdmr bases are in bases/qdmr/ (plan step 3). jayt and
+#   Hytera base files never enter the repository; their renderer steps say how they are
+#   given.
+
+sources: [oevsv-repeater-db]
+
+radios:
+  d878uv2plus:
+    model: AnyTone D878UV II Plus
+    renderer: qdmr
+    base: bases/qdmr/d878uv2plus.yaml
+    capability: &anytone
+      bands:
+        - {name: 2m, rx: [136, 174], tx: [144, 146]}
+        - {name: 70cm, rx: [400, 480], tx: [430, 440]}
+      modes: [FM, DMR]
+      channels: 4000
+      zones: 250
+      zone_channels: 250
+      scan_lists: 250
+      name_length: 16
+    region: {locator: JN88ee, max_km: 80}
+    own_lists: [simplex]
+    dmr_template: standard
+    zones: &dmr_zones
+      - {name: Simplex, source: simplex}
+      - {name: FM 2m, mode: FM, band: 2m}
+      - {name: FM 70cm, mode: FM, band: 70cm}
+      - {name: DMR, mode: DMR}
+    power: High
+    naming: {replace: {" TS1 ": " 1 ", " TS2 ": " 2 "}}
+
+  d168uv:
+    model: AnyTone D168UV
+    renderer: qdmr
+    base: bases/qdmr/d168uv.yaml
+    capability: *anytone
+    region: {locator: JN88ee, max_km: 50}
+    own_lists: [simplex]
+    dmr_template: standard
+    zones: *dmr_zones
+    power: High
+    naming: {replace: {" TS1 ": " 1 ", " TS2 ": " 2 "}}
+
+  uv5r-mini:
+    model: Baofeng UV-5R mini
+    renderer: chirp
+    capability: &baofeng
+      bands:
+        - {name: 2m, rx: [136, 174], tx: [144, 146]}
+        - {name: 70cm, rx: [400, 520], tx: [430, 440]}
+      modes: [FM]
+      channels: 999
+      name_length: 12
+    region: {locator: JN88ee, max_km: 40}
+    own_lists: [simplex]
+    power: High
+
+  uv9r-pro:
+    model: Baofeng UV-9R Pro
+    renderer: chirp
+    capability: *baofeng
+    region: {locator: JN88ee, max_km: 40}
+    own_lists: [simplex]
+    power: High
+
+  rt95:
+    model: Retevis RT95
+    renderer: chirp
+    capability:
+      bands:
+        - {name: 2m, rx: [136, 174], tx: [144, 146]}
+        - {name: 70cm, rx: [400, 480], tx: [430, 440]}
+      modes: [FM]
+      channels: 200
+      name_length: 6
+    region: {prefixes: [OE1, OE3]}
+    own_lists: [simplex]
+    power: High
+
+  ft5d:
+    model: Yaesu FT5D
+    renderer: ft5d
+    capability:
+      bands:
+        - {name: 2m, rx: [108, 174], tx: [144, 146]}
+        - {name: 70cm, rx: [400, 480], tx: [430, 440]}
+      modes: [FM, C4FM]
+      channels: 900
+      zones: 24
+      zone_channels: 100
+      name_length: 16
+    region: {prefixes: [OE]}
+    own_lists: [simplex]
+    zones:
+      - {name: Simplex, source: simplex}
+      - {name: C4FM, mode: C4FM}
+      - {name: FM 2m, mode: FM, band: 2m}
+      - {name: FM 70cm, mode: FM, band: 70cm}
+
+  ft3185:
+    model: Yaesu FT-3185
+    renderer: jayt
+    capability:
+      bands:
+        - {name: 2m, rx: [136, 174], tx: [144, 146]}
+        - {name: 70cm, rx: [400, 480], tx: [430, 440]}
+      modes: [FM]
+      channels: 200
+      name_length: 8
+    region: {locator: JN88ee, max_km: 40}
+    own_lists: [simplex]
+
+  ftx1:
+    model: Yaesu FTX-1
+    renderer: jayt
+    capability:
+      bands:
+        - {name: 10m, rx: [28, 29.7], tx: [28, 29.7]}
+        - {name: 6m, rx: [50, 54], tx: [50, 52]}
+        - {name: 2m, rx: [144, 148], tx: [144, 146]}
+        - {name: 70cm, rx: [430, 450], tx: [430, 440]}
+      modes: [FM, C4FM]
+      channels: 900
+      zones: 24
+      zone_channels: 100
+      name_length: 12
+    region: {prefixes: [OE]}
+    own_lists: [simplex]
+    zones:
+      - {name: Simplex, source: simplex}
+      - {name: C4FM, mode: C4FM}
+      - {name: FM, mode: FM}
+
+  hp785:
+    model: Hytera HP785
+    renderer: hytera
+    capability: &hytera
+      bands:
+        - {name: 70cm, rx: [400, 470], tx: [430, 440]}
+      modes: [FM, DMR]
+      channels: 1024
+      zones: 64
+      zone_channels: 16
+      name_length: 16
+    region: {locator: JN88ee, max_km: 40}
+    own_lists: [simplex]
+    dmr_template: standard
+    zones:
+      - {name: Simplex, source: simplex}
+      - {name: DMR, mode: DMR}
+      - {name: FM, mode: FM}
+    power: High
+
+  hm785:
+    model: Hytera HM785
+    renderer: hytera
+    capability: *hytera
+    region: {prefixes: [OE1, OE3]}
+    own_lists: [simplex]
+    dmr_template: standard
+    zones:
+      - {name: Simplex, source: simplex}
+      - {name: DMR, mode: DMR}
+      - {name: FM, mode: FM}
+    power: High

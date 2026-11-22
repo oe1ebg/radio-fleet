@@ -19,30 +19,65 @@ class FakeMcp:
         return self.csv_text
 
 
+def fleet_file(directory: Path, *sources: str) -> str:
+    path = directory / "fleet.yaml"
+    path.write_text(f"sources: [{', '.join(sources)}]\nradios: {{}}\n")
+    return str(path)
+
+
 class NoNetwork:
     def fetch_csv(self, source: str) -> str:
         raise AssertionError("offline fetch must not call MCP")
 
 
-def test_fetch_writes_the_snapshot_of_the_default_source(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_fetch_writes_a_snapshot_for_each_source_of_the_fleet(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     fake = FakeMcp(mcp_csv([FM_REPEATER, DMR_REPEATER]))
-    assert main(["fetch", "--snapshots", str(tmp_path)], fetcher=fake) == 0
-    assert fake.sources == ["oevsv-repeater-db"]
-    assert (tmp_path / "oevsv-repeater-db.csv").exists()
-    assert "oevsv-repeater-db: 2 channels" in capsys.readouterr().out
+    fleet = fleet_file(tmp_path, "synthetic-a", "synthetic-b")
+    assert main(["fetch", "--fleet", fleet, "--snapshots", str(tmp_path)], fetcher=fake) == 0
+    assert fake.sources == ["synthetic-a", "synthetic-b"]
+    assert (tmp_path / "synthetic-a.csv").exists()
+    assert (tmp_path / "synthetic-b.csv").exists()
+    assert "synthetic-b: 2 channels" in capsys.readouterr().out
+
+
+class OneSourceUp:
+    def fetch_csv(self, source: str) -> str:
+        if source != "synthetic-up":
+            raise FetchError(f"memory-channels-processor failed for source {source!r}: synthetic outage")
+        return mcp_csv([FM_REPEATER])
+
+
+def test_a_failing_source_does_not_stop_the_others(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    fleet = fleet_file(tmp_path, "synthetic-down", "synthetic-up", "synthetic-gone")
+    assert main(["fetch", "--fleet", fleet, "--snapshots", str(tmp_path)], fetcher=OneSourceUp()) == 1
+    captured = capsys.readouterr()
+    assert captured.out == f"synthetic-up: 1 channels in {tmp_path / 'synthetic-up.csv'}\n"
+    assert "'synthetic-down': synthetic outage" in captured.err
+    assert "'synthetic-gone': synthetic outage" in captured.err
 
 
 def test_offline_fetch_reads_the_snapshot_without_mcp(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    main(["fetch", "--snapshots", str(tmp_path)], fetcher=FakeMcp(mcp_csv([FM_REPEATER])))
+    main(
+        ["fetch", "--source", "oevsv-repeater-db", "--snapshots", str(tmp_path)],
+        fetcher=FakeMcp(mcp_csv([FM_REPEATER])),
+    )
     before = (tmp_path / "oevsv-repeater-db.csv").read_bytes()
     capsys.readouterr()
-    assert main(["fetch", "--offline", "--snapshots", str(tmp_path)], fetcher=NoNetwork()) == 0
+    assert (
+        main(["fetch", "--source", "oevsv-repeater-db", "--offline", "--snapshots", str(tmp_path)], fetcher=NoNetwork())
+        == 0
+    )
     assert "oevsv-repeater-db: 1 channels" in capsys.readouterr().out
     assert (tmp_path / "oevsv-repeater-db.csv").read_bytes() == before
 
 
 def test_offline_fetch_without_a_snapshot_fails(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["fetch", "--offline", "--snapshots", str(tmp_path)], fetcher=NoNetwork()) == 1
+    assert (
+        main(["fetch", "--source", "oevsv-repeater-db", "--offline", "--snapshots", str(tmp_path)], fetcher=NoNetwork())
+        == 1
+    )
     assert "no snapshot for 'oevsv-repeater-db'" in capsys.readouterr().err
 
 
@@ -67,6 +102,12 @@ def test_mcp_cli_runs_mcp_with_csv_output(tmp_path: Path) -> None:
         cli.fetch_csv("broken")
 
 
+def test_a_missing_mcp_is_reported_as_a_missing_tool(tmp_path: Path) -> None:
+    cli = McpCli(command=[str(tmp_path / "no-such-mcp")])
+    with pytest.raises(FetchError, match="memory-channels-processor is not installed"):
+        cli.fetch_csv("synthetic-db")
+
+
 class FailingMcp:
     def fetch_csv(self, source: str) -> str:
         raise FetchError(f"memory-channels-processor failed for source {source!r}: synthetic outage")
@@ -83,10 +124,13 @@ class FailingMcp:
 def test_a_failed_fetch_exits_1_and_keeps_the_snapshot(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], fetcher: Fetcher, message: str
 ) -> None:
-    main(["fetch", "--snapshots", str(tmp_path)], fetcher=FakeMcp(mcp_csv([DMR_REPEATER])))
+    main(
+        ["fetch", "--source", "oevsv-repeater-db", "--snapshots", str(tmp_path)],
+        fetcher=FakeMcp(mcp_csv([DMR_REPEATER])),
+    )
     before = (tmp_path / "oevsv-repeater-db.csv").read_bytes()
     capsys.readouterr()
-    assert main(["fetch", "--snapshots", str(tmp_path)], fetcher=fetcher) == 1
+    assert main(["fetch", "--source", "oevsv-repeater-db", "--snapshots", str(tmp_path)], fetcher=fetcher) == 1
     captured = capsys.readouterr()
     assert re.search(f"^fleet fetch: .*{message}", captured.err)
     assert captured.out == ""
