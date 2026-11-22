@@ -5,13 +5,15 @@
 # capability: what the radio can carry. TX limits are the Austrian amateur bands, so a
 #   channel that transmits outside them is dropped. Limits that are left out are 0.
 #   The channel, zone and name limits follow the manufacturers' data; the renderer
-#   step of each radio checks them against its tool.
+#   step of each radio checks them against its tool. dmrconf 0.15 accepts the AnyTone
+#   bands, 4000 channels, 250 zones of 250 channels and 16-character names.
 # region: {locator, max_km} or {prefixes}; it applies to upstream channels only.
 # zones: zone (or bank) rules. A rule's keys mode, band, source, tag and channel (a
 #   name pattern) take one value or a list; a channel joins when it meets every key.
 # base: the renderer's base file, relative to the data root; a base that is named but
-#   missing is an error. Synthetic qdmr bases come with plan step 3. jayt and Hytera base
-#   files never enter a repository; their renderer steps say how they are given.
+#   missing is an error. A qdmr radio needs one; `fleet build` keeps its settings and
+#   hand-made objects. jayt and Hytera base files never enter a repository; their
+#   renderer steps say how they are given.
 
 sources: [oevsv-repeater-db]
 
@@ -19,6 +21,7 @@ radios:
   d878uv2plus:
     model: AnyTone D878UV II Plus
     renderer: qdmr
+    base: bases/qdmr/d878uv2plus.yaml
     capability: &anytone
       bands:
         - {name: 2m, rx: [136, 174], tx: [144, 146]}
@@ -43,6 +46,7 @@ radios:
   d168uv:
     model: AnyTone D168UV
     renderer: qdmr
+    base: bases/qdmr/d168uv.yaml
     capability: *anytone
     region: {locator: JJ00mm, max_km: 50}
     own_lists: [simplex]

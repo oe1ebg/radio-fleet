@@ -3,4 +3,4 @@
 templates:
   standard:
     - {name: TS1 TG232, time_slot: 1, tx_talkgroup: TG232, rx_group_list: Austria}
-    - {name: TS2 TG9, time_slot: 2, tx_talkgroup: TG9}
+    - {name: TS2 TG9, time_slot: 2, tx_talkgroup: TG9, rx_group_list: Austria}

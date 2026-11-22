@@ -5,5 +5,5 @@ tags: [simplex]
 channels:
   - {name: 2m Call, rx: 145.500, mode: FM}
   - {name: 70cm Call, rx: 433.500, mode: FM}
-  - {name: DMR Simplex, rx: 433.450, mode: DMR, color_code: 1, time_slot: 1, tx_talkgroup: TG99}
+  - {name: DMR Simplex, rx: 433.450, mode: DMR, color_code: 1, time_slot: 1, tx_talkgroup: TG99, rx_group_list: Simplex}
   - {name: C4FM Call, rx: 145.375, mode: C4FM}

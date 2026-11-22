@@ -8,7 +8,7 @@ The radios are AnyTone (qdmr), Baofeng/Retevis (CHIRP), Yaesu (ADMS, jayt) and H
 - Order of work: [`docs/PLAN.md`](docs/PLAN.md)
 - Rules: [`AGENTS.md`](AGENTS.md)
 
-Status: `fleet fetch` snapshots the upstream sources named in `fleet.yaml` (or by `--source`) to `snapshots/` (`--offline` reads the existing snapshots). `fleet select --radio R` prints the channels, zones, drops with their reasons, and applied overrides of one radio from the snapshots and `sources/`. No radio is built yet.
+Status: `fleet fetch` snapshots the upstream sources named in `fleet.yaml` (or by `--source`) to `snapshots/` (`--offline` reads the existing snapshots). `fleet select --radio R` prints the channels, zones, drops with their reasons, and applied overrides of one radio from the snapshots and `sources/`. `fleet build --radio R` builds a qdmr radio (AnyTone): it merges the selection into the radio's base qdmr YAML, writes `build/<radio>/<radio>.yaml` and checks it with `dmrconf verify` (qdmr 0.15); a file that fails the check is removed and the build exits non-zero. Generated objects have ids that start with `gen_`; every build replaces them and keeps the base's settings and hand-made objects. The other renderers come with later plan steps.
 
 ## Data root
 

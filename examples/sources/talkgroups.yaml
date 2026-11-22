@@ -7,3 +7,4 @@ talkgroups:
   TG232: 232
 rx_group_lists:
   Austria: [TG232, TG9]
+  Simplex: [TG99]

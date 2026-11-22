@@ -1,0 +1,39 @@
+# Synthetic qdmr base: settings, radio ID, APRS and hand-made objects that `fleet build` keeps.
+# Objects whose id starts with gen_ are replaced by every build.
+version: 0.12.0
+settings:
+  introLine1: Synthetic
+  introLine2: Base
+  micLevel: 2
+  speech: false
+  power: High
+  squelch: 1
+  vox: 0
+  tot: 0
+  defaultID: id1
+radioIDs:
+  - dmr: {id: id1, name: XX0XXX, number: 9990001}
+contacts:
+  - dmr: {id: cont1, name: Worldwide, ring: false, type: GroupCall, number: 9}
+groupLists:
+  - {id: grp1, name: Worldwide, contacts: [cont1]}
+channels:
+  - fm:
+      id: ch1
+      name: APRS
+      rxFrequency: 144.8 MHz
+      txFrequency: 144.8 MHz
+      power: High
+      bandwidth: Wide
+zones:
+  - {id: zone1, name: APRS, A: [ch1], B: []}
+positioning:
+  - aprs:
+      id: aprs1
+      name: APRS
+      period: 300
+      revert: ch1
+      destination: APAT81-0
+      source: XX0XXX-7
+      path: [WIDE1-1, WIDE2-1]
+      message: Synthetic
