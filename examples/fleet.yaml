@@ -18,8 +18,15 @@
 # power: the chirp renderer needs watts (5W); qdmr takes Max, High, Mid, Low or Min.
 # ft5d: zones become the ADMS banks 1 to 24, in order. MCP's FT5D output carries no
 #   DCS, so a DCS channel fails the build; this example region leaves out XX1CC.
+# tools.jayt: the jayt executable (relative to the data root, or absolute) and the
+#   commit it was built from; the jayt renderer needs it. The path here is a placeholder.
+#   A jayt radio's base is its radio file (an FT-3185 image), which never enters a
+#   repository: name a git-ignored or absolute path in the owner's fleet.yaml.
 
 sources: [oevsv-repeater-db]
+
+tools:
+  jayt: {path: tools/jayt, commit: '0000000'}
 
 radios:
   d878uv2plus:
@@ -126,7 +133,7 @@ radios:
         - {name: 70cm, rx: [400, 480], tx: [430, 440]}
       modes: [FM]
       channels: 200
-      name_length: 8
+      name_length: 6
     region: {locator: JJ00mm, max_km: 40}
     own_lists: [simplex]
 
