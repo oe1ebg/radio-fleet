@@ -8,7 +8,9 @@ from radio_fleet import __version__
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="fleet", description="Build CPS files for every radio from one channel source.")
+    parser = argparse.ArgumentParser(
+        prog="fleet", description="Build CPS files for every radio from one channel source."
+    )
     parser.add_argument("--version", action="version", version=f"fleet {__version__}")
     parser.parse_args(argv)
     parser.print_help()
