@@ -17,7 +17,7 @@
 #   dmrconf radio.
 # hytera renderer: `base` is the radio's .rcdx (its secrets come from it), `factory` an
 #   unmodified CPS factory image (the defaults of added records), and the top-level
-#   `hytera_reverse` the tool's checkout. These files stay outside every repository,
+#   `hytera_reverse` the tool's checkout. These files stay outside this repository,
 #   so the Hytera profiles below show them as comments with placeholder paths.
 
 sources: [oevsv-repeater-db]
