@@ -56,9 +56,14 @@ radios:
       bands: [{name: 2m, rx: [136, 174], tx: [144, 146]}]
       modes: [FM]
       channels: 10
+      zones: 2
+      zone_channels: 3
       name_length: 6
     region: {prefixes: [XX1]}
     own_lists: [synthetic]
+    zones:
+      - {name: Own, source: synthetic}
+      - {name: XX1, channel: ["XX1F*", "XX1?Z"]}
 """
 
 NEAR, FAR = Position(48.2, 16.4), Position(47.0, 15.4)
@@ -118,7 +123,10 @@ def test_selection_of_a_synthetic_fleet(synthetic: tuple[fleet.Fleet, sources.So
         ("XX1NP", None),
         ("XX1ZZ", None),
     ]
-    assert mono.zones == ()
+    assert [(z.name, [c.name for c in z.channels]) for z in mono.zones] == [
+        ("Own", ["S1"]),
+        ("XX1", ["XX1FM", "XX1ZZ"]),
+    ]
     assert list(mono.drops) == [
         Drop("XX2FM", "callsign outside the region prefixes XX1"),
         Drop("S2", "RX 433.50000 MHz outside the RX bands"),
