@@ -1,5 +1,7 @@
 # build output of any data root, and caches
 build/
+/examples/equipment/
+/examples/applied.yaml
 /.venv/
 __pycache__/
 *.pyc

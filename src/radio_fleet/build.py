@@ -1,7 +1,8 @@
 """`fleet build` (R10): render one radio's file and check it with the radio's tool.
 
 The file is checked before it enters `build/<radio>/`, so that directory never holds a file that failed
-its check; a failed build also removes the radio's earlier output.
+its check; a failed build also removes the radio's earlier output. A build that passed also writes its
+record (R11), which marks `build/<radio>/` as complete.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from radio_fleet import record
 from radio_fleet.dmrconf import CheckError, Dmrconf
 from radio_fleet.fleet import Renderer
 from radio_fleet.hytera_tool import HyteraTool
@@ -38,6 +40,22 @@ def build(
     hytera_tool: HyteraTool | None = None,
 ) -> Path:
     """Return the path of the checked file."""
+    directory = build_dir / selection.radio.id
+    (directory / record.RECORD).unlink(missing_ok=True)
+    output = _render(selection, sources, build_dir, dmrconf, mcp, jayt, hytera_tool)
+    record.write_build(selection, directory)
+    return output
+
+
+def _render(
+    selection: Selection,
+    sources: Sources,
+    build_dir: Path,
+    dmrconf: Dmrconf,
+    mcp: Exporter,
+    jayt: Jayt | None,
+    hytera_tool: HyteraTool | None,
+) -> Path:
     radio = selection.radio
     if radio.renderer is Renderer.JAYT:
         if jayt is None:
