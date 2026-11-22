@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
@@ -105,10 +106,19 @@ class Radio:
 
 
 @dataclass(frozen=True, slots=True)
+class Tool:
+    """An external tool's executable and the commit it was built from."""
+
+    path: Path
+    commit: str
+
+
+@dataclass(frozen=True, slots=True)
 class Fleet:
     file: str
     sources: tuple[str, ...]
     radios: Mapping[str, Radio]
+    jayt: Tool | None = None
 
     def check_references(self, sources: Sources) -> None:
         """Every file a profile names must exist: its own lists, its DMR template's file and its base."""
@@ -127,12 +137,25 @@ class Fleet:
 
 def load(path: Path, data_root: Path) -> Fleet:
     """Paths in the file, such as bases, are relative to the data root (R13), not to the file."""
-    fields = config.load(path).fields(["sources", "radios"])
+    fields = config.load(path).fields(["sources", "radios"], ["tools"])
     sources = fields["sources"].texts()
     if not sources:
         raise fields["sources"].error("name at least one source")
     radios = {radio_id: _radio(radio_id, node, data_root) for radio_id, node in fields["radios"].entries().items()}
-    return Fleet(str(path), sources, radios)
+    tools = fields["tools"].fields((), ["jayt"]) if "tools" in fields else {}
+    jayt = _tool(tools["jayt"], data_root) if "jayt" in tools else None
+    return Fleet(str(path), sources, radios, jayt)
+
+
+_COMMIT = re.compile(r"[0-9a-f]{7,40}")
+
+
+def _tool(node: Node, data_root: Path) -> Tool:
+    fields = node.fields(["path", "commit"])
+    commit = fields["commit"].text()
+    if not _COMMIT.fullmatch(commit):
+        raise fields["commit"].error("expected a git commit: 7 to 40 hex digits")
+    return Tool(data_root / fields["path"].text(), commit)
 
 
 def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
