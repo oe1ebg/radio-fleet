@@ -70,7 +70,7 @@ def main(argv: list[str] | None = None, fetcher: Fetcher | None = None, dmrconf:
         if args.command == "select":
             _print(selection)
             return 0
-        output = build.build(selection, own, data_root / "build", dmrconf or DmrconfCli())
+        output = build.build(selection, own, data_root / "build", dmrconf or DmrconfCli(), McpCli())
         print(f"{args.radio}: {output}")
         return 0
     except build.BuildError as error:
