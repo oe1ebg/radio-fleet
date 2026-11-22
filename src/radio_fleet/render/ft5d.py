@@ -18,7 +18,7 @@ from collections.abc import Sequence
 from radio_fleet.fleet import Capability
 from radio_fleet.mcp import Exporter
 from radio_fleet.model import Channel, Ctcss, Dcs, Mode
-from radio_fleet.render.csvcheck import check_memories, check_rows, rows
+from radio_fleet.render.csvcheck import check_memories, check_rows, mhz, rows
 from radio_fleet.selection import Selection
 from radio_fleet.snapshot import COLUMNS
 
@@ -45,7 +45,7 @@ def render(selection: Selection, mcp: Exporter) -> str:
 
 def check(text: str, capability: Capability) -> None:
     table = rows(text)
-    check_rows(table, WIDTH, location=0, first=1)
+    check_rows(table, WIDTH)
     check_memories([row[_NAME] for row in table if row[_RX]], capability)
 
 
@@ -78,8 +78,8 @@ def _row(number: int, channel: Channel, capability: Capability) -> dict[str, str
     row.update(
         callsign=channel.name,
         band=band.name if band is not None else "",
-        freq_tx=_mhz(channel.tx_hz),
-        freq_rx=_mhz(channel.rx_hz),
+        freq_tx=mhz(channel.tx_hz),
+        freq_rx=mhz(channel.rx_hz),
         scan_group=str(number),
         source_id=channel.source,
     )
@@ -119,7 +119,3 @@ def _csv(memories: Sequence[dict[str, str]]) -> str:
     writer.writeheader()
     writer.writerows(memories)
     return out.getvalue()
-
-
-def _mhz(hz: int) -> str:
-    return f"{hz / 1_000_000:.6f}"

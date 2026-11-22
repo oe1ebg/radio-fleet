@@ -1,4 +1,4 @@
-"""The row and column checks of the CSV outputs (R10): what the radio's import tool would refuse or cut."""
+"""Shared by the CSV outputs: the frequency format and the row and column checks (R10)."""
 
 from __future__ import annotations
 
@@ -17,13 +17,17 @@ def rows(text: str) -> list[list[str]]:
     return list(csv.reader(io.StringIO(text, newline="")))
 
 
-def check_rows(table: Sequence[Sequence[str]], width: int, location: int, first: int) -> None:
-    """Every row has `width` columns, and the column `location` numbers the rows from `first` on."""
-    for number, row in enumerate(table, first):
+def mhz(hz: int) -> str:
+    return f"{hz / 1_000_000:.6f}"
+
+
+def check_rows(table: Sequence[Sequence[str]], width: int) -> None:
+    """Every row has `width` columns, and the first column numbers the rows from 1 on."""
+    for number, row in enumerate(table, 1):
         if len(row) != width:
             raise CsvCheckError(f"row {number}: {len(row)} columns, expected {width}")
-        if row[location] != str(number):
-            raise CsvCheckError(f"row {number}: location {row[location]!r}, expected {number}")
+        if row[0] != str(number):
+            raise CsvCheckError(f"row {number}: location {row[0]!r}, expected {number}")
 
 
 def check_memories(names: Sequence[str], capability: Capability) -> None:

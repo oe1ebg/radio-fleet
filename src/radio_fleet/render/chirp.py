@@ -13,7 +13,7 @@ import re
 
 from radio_fleet.fleet import Capability
 from radio_fleet.model import Channel, Ctcss, Dcs, Mode, Tone
-from radio_fleet.render.csvcheck import CsvCheckError, check_memories, check_rows, rows
+from radio_fleet.render.csvcheck import CsvCheckError, check_memories, check_rows, mhz, rows
 from radio_fleet.selection import Selection
 
 COLUMNS = (
@@ -63,7 +63,7 @@ def check(text: str, capability: Capability) -> None:
     table = rows(text)
     if not table or tuple(table[0]) != COLUMNS:
         raise CsvCheckError(f"the header is not CHIRP's: {','.join(COLUMNS)}")
-    check_rows(table[1:], len(COLUMNS), location=0, first=1)
+    check_rows(table[1:], len(COLUMNS))
     check_memories([row[1] for row in table[1:]], capability)
 
 
@@ -76,9 +76,9 @@ def _row(number: int, channel: Channel) -> list[str]:
     return [
         str(number),
         channel.name,
-        _mhz(channel.rx_hz),
+        mhz(channel.rx_hz),
         duplex,
-        _mhz(abs(offset)),
+        mhz(abs(offset)),
         *_tones(channel.tone_tx, channel.tone_rx),
         "NFM" if narrow else "FM",
         _step(channel, abs(offset)),
@@ -126,7 +126,7 @@ def _step(channel: Channel, offset: int) -> str:
     for step in STEPS_HZ:
         if channel.rx_hz % step == 0 and offset % step == 0:
             return f"{step / 1000:.2f}"
-    raise RenderError(f"channel {channel.name}: RX {_mhz(channel.rx_hz)} MHz is on no CHIRP tuning step")
+    raise RenderError(f"channel {channel.name}: RX {mhz(channel.rx_hz)} MHz is on no CHIRP tuning step")
 
 
 def _power(channel: Channel) -> str:
@@ -134,7 +134,3 @@ def _power(channel: Channel) -> str:
     if match is None:
         raise RenderError(f"channel {channel.name}: CHIRP needs the power in watts, such as 5W, not {channel.power!r}")
     return f"{float(match.group(1)):.1f}W"
-
-
-def _mhz(hz: int) -> str:
-    return f"{hz / 1_000_000:.6f}"
