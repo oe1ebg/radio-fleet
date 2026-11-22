@@ -17,18 +17,37 @@ inputs:
     description: Optional extra instructions from the owner for this step.
 
 nodes:
+  # Bash nodes read inputs as INPUTS_<NAME> env vars; $INPUTS.<name> works only in prompts.
+  # stdout is the node's JSON output, so tool and check output goes to stderr.
   - id: preflight
     bash: |
       set -eu
-      uv --version
-      just --version
-      git remote get-url origin
-      grep -qE "^\| $INPUTS_STEP \|" docs/PLAN.md || { echo "step $INPUTS_STEP is not in docs/PLAN.md" >&2; exit 1; }
-      just ci
+      uv --version >&2
+      just --version >&2
+      git remote get-url origin >&2
+      if ! grep -qE "^\| $INPUTS_STEP \|" docs/PLAN.md; then
+        echo '{"ok": false}'
+        exit 0
+      fi
+      just ci >&2
+      echo '{"ok": true}'
+    output_format:
+      type: object
+      properties:
+        ok: { type: boolean }
+      required: [ok]
+
+  - id: refuse
+    depends_on: [preflight]
+    when: "$preflight.output.ok == false"
+    bash: |
+      echo "step $INPUTS_STEP is not in docs/PLAN.md" >&2
+      exit 1
 
   - id: deliver
     include: archon-deliver
     depends_on: [preflight]
+    when: "$preflight.output.ok == true"
     with:
       work: |-
         Implement step $INPUTS.step of docs/PLAN.md in this repository (radio-fleet).
@@ -45,7 +64,12 @@ nodes:
           a fake for the tests; do not copy their code.
         - Do not change SPEC.md or docs/PLAN.md. If the step cannot be done as
           specified, stop and report why.
-        - Checks: `just ci` must pass. Conventional Commits that name the
-          requirement IDs.
+        - Checks: `just ci` must pass (ruff check, ruff format --check, mypy
+          strict, pytest). Conventional Commits that name the requirement IDs.
+        - A test that needs dmrconf carries `@pytest.mark.dmrconf`
+          (tests/conftest.py skips it when dmrconf is missing). dmrconf 0.15 is
+          installed on the machine that runs this workflow: run
+          `just test-dmrconf` and put its result in the PR description. The CI
+          job `dmrconf` runs these tests too.
 
         $INPUTS.note

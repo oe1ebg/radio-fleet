@@ -6,7 +6,15 @@ Each step is delivered as one pull request through the repo workflow `fleet-step
 archon --cwd ~/projects/oe1ebg/radio-fleet workflow run fleet-step --input step=1 "Plan step 1"
 ```
 
-The run implements the step on a branch, opens a draft PR, reviews and simplifies it, and waits for green CI. Merging is the owner's step. Run the next step after the previous PR is merged.
+The run implements the step on a branch, opens a draft PR, reviews and simplifies it, and waits for green CI. Merging is the owner's step. Run the next step after the previous PR is merged. Exception: after step 3 is merged, steps 4, 5 and 6 can run at the same time, because each one adds its own renderer under `render/`. Merge them one at a time; the delivery merges `main` into the other branches when they conflict.
+
+Facts that are true for one run only go in the `note` input, for example where jayt or hytera_reverse is installed:
+
+```sh
+archon --cwd ~/projects/oe1ebg/radio-fleet workflow run fleet-step --input step=5 --input note="jayt is at ~/projects/jayt, commit abc1234" "Plan step 5"
+```
+
+Change `fleet-step` only together with its fixtures; `just workflow-test` replays them.
 
 | Step | Requirements | Content |
 |---|---|---|

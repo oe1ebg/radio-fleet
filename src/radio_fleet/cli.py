@@ -13,14 +13,23 @@ DEFAULT_SOURCES = ("oevsv-repeater-db",)
 
 
 def main(argv: list[str] | None = None, fetcher: Fetcher | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="fleet", description="Build CPS files for every radio from one channel source.")
+    parser = argparse.ArgumentParser(
+        prog="fleet", description="Build CPS files for every radio from one channel source."
+    )
     parser.add_argument("--version", action="version", version=f"fleet {__version__}")
     commands = parser.add_subparsers(dest="command")
 
     fetch = commands.add_parser("fetch", help="snapshot the upstream sources to snapshots/<source>.csv")
-    fetch.add_argument("--source", action="append", dest="sources", metavar="SOURCE",
-                       help=f"MCP source to fetch (repeatable; default: {', '.join(DEFAULT_SOURCES)})")
-    fetch.add_argument("--snapshots", type=Path, default=Path("snapshots"), help="snapshot directory (default: snapshots)")
+    fetch.add_argument(
+        "--source",
+        action="append",
+        dest="sources",
+        metavar="SOURCE",
+        help=f"MCP source to fetch (repeatable; default: {', '.join(DEFAULT_SOURCES)})",
+    )
+    fetch.add_argument(
+        "--snapshots", type=Path, default=Path("snapshots"), help="snapshot directory (default: snapshots)"
+    )
     fetch.add_argument("--offline", action="store_true", help="read the existing snapshots instead of the network")
 
     args = parser.parse_args(argv)
