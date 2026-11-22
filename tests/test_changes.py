@@ -11,17 +11,17 @@ import pytest
 from radio_fleet import changes, fleet, record
 from radio_fleet.cli import main
 from radio_fleet.dmrconf import CheckError
-from radio_fleet.model import Channel, Ctcss, Dcs, Mode, Power
+from radio_fleet.model import Channel, Ctcss, Dcs, Mode
 from radio_fleet.record import Applied
 from radio_fleet.selection import Drop, Selection
 from radio_fleet.sources import AppliedOverride, Override
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
-CALL = Channel("2m Call", 145_500_000, 145_500_000, Mode.FM, power=Power.HIGH)
-REPEATER = Channel("XX1AA", 145_600_000, 145_000_000, Mode.FM, tone_tx=Ctcss(88.5), power=Power.HIGH)
-GONE = Channel("XX1GO", 438_650_000, 431_050_000, Mode.FM, power=Power.HIGH)
-TWIN = Channel("XX1TW", 439_000_000, 431_400_000, Mode.FM, tone_tx=Dcs(23), power=Power.HIGH)
+CALL = Channel("2m Call", 145_500_000, 145_500_000, Mode.FM, power="5W")
+REPEATER = Channel("XX1AA", 145_600_000, 145_000_000, Mode.FM, tone_tx=Ctcss(88.5), power="5W")
+GONE = Channel("XX1GO", 438_650_000, 431_050_000, Mode.FM, power="5W")
+TWIN = Channel("XX1TW", 439_000_000, 431_400_000, Mode.FM, tone_tx=Dcs(23), power="5W")
 
 
 def test_a_before_and_after_pair_gives_the_expected_report(tmp_path: Path) -> None:
@@ -29,8 +29,8 @@ def test_a_before_and_after_pair_gives_the_expected_report(tmp_path: Path) -> No
     before = (CALL, REPEATER, GONE, TWIN)
     after = (
         CALL,
-        replace(REPEATER, tone_tx=Ctcss(77.0), tone_rx=Ctcss(77.0), power=Power.LOW),
-        replace(TWIN, power=Power.LOW),
+        replace(REPEATER, tone_tx=Ctcss(77.0), tone_rx=Ctcss(77.0), power="1W"),
+        replace(TWIN, power="1W"),
         replace(TWIN, name="XX1TW"),
         Channel("XX1NE", 438_700_000, 431_100_000, Mode.FM, bandwidth_hz=12_500),
     )
@@ -48,7 +48,7 @@ def test_a_before_and_after_pair_gives_the_expected_report(tmp_path: Path) -> No
     build = tmp_path / "build"
     record.write_build(selection, build / "uv5r-mini")
     applied = tmp_path / "applied.yaml"
-    record.save_applied(applied, {"uv5r-mini": Applied("2026-01-02", "sha256:00", records(before, radio))})
+    record.save_applied(applied, {"uv5r-mini": Applied("2026-01-02", "sha256:00", records(before))})
 
     changes.write([radio], build, applied)
 
@@ -91,7 +91,7 @@ def test_a_before_and_after_pair_gives_the_expected_report(tmp_path: Path) -> No
 
 def test_the_first_build_compares_against_nothing_and_an_unbuilt_radio_says_so(tmp_path: Path) -> None:
     radios = fleet.load(EXAMPLES / "fleet.yaml", EXAMPLES).radios
-    selection = Selection(radios["rt95"], (CALL,), (), (), (), ())
+    selection = Selection(radios["rt95"], (replace(CALL, power="25W"),), (), (), (), ())
     record.write_build(selection, tmp_path / "build" / "rt95")
 
     changes.write([radios["rt95"], radios["hm785"]], tmp_path / "build", tmp_path / "applied.yaml")
@@ -109,8 +109,8 @@ def test_the_first_build_compares_against_nothing_and_an_unbuilt_radio_says_so(t
     ]
 
 
-def records(channels: tuple[Channel, ...], radio: fleet.Radio) -> tuple[record.ChannelRecord, ...]:
-    return tuple(record.channel_record(channel, radio) for channel in channels)
+def records(channels: tuple[Channel, ...]) -> tuple[record.ChannelRecord, ...]:
+    return tuple(record.channel_record(channel) for channel in channels)
 
 
 def lists(before: tuple[Channel, ...], after: tuple[Channel, ...], tmp_path: Path) -> dict[str, list[str]]:
@@ -118,7 +118,7 @@ def lists(before: tuple[Channel, ...], after: tuple[Channel, ...], tmp_path: Pat
     radio = fleet.load(EXAMPLES / "fleet.yaml", EXAMPLES).radios["uv5r-mini"]
     record.write_build(Selection(radio, after, (), (), (), ()), tmp_path / "build" / "uv5r-mini")
     applied = tmp_path / "applied.yaml"
-    record.save_applied(applied, {"uv5r-mini": Applied("2026-01-02", "sha256:00", records(before, radio))})
+    record.save_applied(applied, {"uv5r-mini": Applied("2026-01-02", "sha256:00", records(before))})
     changes.write([radio], tmp_path / "build", applied)
     report = (tmp_path / "build" / "CHANGES.md").read_text(encoding="utf-8")
     return {
@@ -128,9 +128,9 @@ def lists(before: tuple[Channel, ...], after: tuple[Channel, ...], tmp_path: Pat
 
 
 def test_the_modes_of_a_multi_mode_repeater_are_told_apart(tmp_path: Path) -> None:
-    fm = Channel("XX1CC", 439_100_000, 431_500_000, Mode.FM, tone_tx=Ctcss(88.5), power=Power.HIGH)
-    dmr = Channel("XX1CC", 439_100_000, 431_500_000, Mode.DMR, color_code=1, time_slot=1, power=Power.HIGH)
-    assert lists((fm, dmr), (replace(dmr, power=Power.LOW),), tmp_path) == {
+    fm = Channel("XX1CC", 439_100_000, 431_500_000, Mode.FM, tone_tx=Ctcss(88.5), power="5W")
+    dmr = Channel("XX1CC", 439_100_000, 431_500_000, Mode.DMR, color_code=1, time_slot=1, power="5W")
+    assert lists((fm, dmr), (replace(dmr, power="1W"),), tmp_path) == {
         "Added": [],
         "Removed": ["XX1CC [FM]: rx 439.10000, tx 431.50000, mode FM, tone_tx CTCSS 88.5, power 5W"],
         "Changed": ["XX1CC [DMR]: power 5W -> 1W"],
@@ -138,8 +138,8 @@ def test_the_modes_of_a_multi_mode_repeater_are_told_apart(tmp_path: Path) -> No
 
 
 def test_a_channel_named_like_a_repeat_is_its_own_channel(tmp_path: Path) -> None:
-    named = replace(TWIN, name="XX1TW (2)", power=Power.LOW)
-    assert lists((TWIN, replace(TWIN, power=Power.MID), named), (TWIN, named), tmp_path) == {
+    named = replace(TWIN, name="XX1TW (2)", power="1W")
+    assert lists((TWIN, replace(TWIN, power="2W"), named), (TWIN, named), tmp_path) == {
         "Added": [],
         "Removed": ["XX1TW [FM #2]: rx 439.00000, tx 431.40000, mode FM, tone_tx DCS 023, power 2W"],
         "Changed": [],
@@ -172,11 +172,10 @@ def test_an_unreadable_build_record_is_reported_and_the_other_radios_still_are(t
 
 
 def test_every_channel_field_a_radio_holds_is_recorded_and_compared() -> None:
-    radio = fleet.load(EXAMPLES / "fleet.yaml", EXAMPLES).radios["uv5r-mini"]
     full = Channel(
-        "XX1FU", 438_000_000, 430_400_000, Mode.DMR, Ctcss(67.0), Dcs(23), 12_500, 1, 2, "TG 232", "Austria", Power.LOW
+        "XX1FU", 438_000_000, 430_400_000, Mode.DMR, Ctcss(67.0), Dcs(23), 12_500, 1, 2, "TG 232", "Austria", "1W"
     )
-    assert list(record.channel_record(replace(full, rx_only=True), radio)) == ["name", *record.FIELDS]
+    assert list(record.channel_record(replace(full, rx_only=True))) == ["name", *record.FIELDS]
     others: dict[str, Any] = {
         "name": "XX1FV",
         "rx_hz": 438_100_000,
@@ -189,14 +188,14 @@ def test_every_channel_field_a_radio_holds_is_recorded_and_compared() -> None:
         "time_slot": 1,
         "tx_talkgroup": "TG 9",
         "rx_group_list": "Local",
-        "power": Power.HIGH,
+        "power": "5W",
         "rx_only": True,
     }
     not_held = {"tags", "source", "position", "callsign", "site"}
     assert {field.name for field in fields(Channel)} == set(others) | not_held
     for field, value in others.items():
-        changed = record.channel_record(replace(full, **{field: value}), radio)
-        assert changed != record.channel_record(full, radio), field
+        changed = record.channel_record(replace(full, **{field: value}))
+        assert changed != record.channel_record(full), field
 
 
 class FakeDmrconf:

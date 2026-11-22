@@ -139,7 +139,7 @@ def test_selection_of_a_synthetic_fleet(synthetic: tuple[fleet.Fleet, sources.So
     mono = select(the_fleet.radios["mono"], UPSTREAM, own)
     assert [(c.name, c.power) for c in mono.channels] == [
         ("S1", None),
-        ("XX1FM", "Low"),
+        ("XX1FM", "1W"),
         ("XX1NP", None),
         ("XX1ZZ", None),
     ]
@@ -330,8 +330,7 @@ def test_channel_data_of_step_8b_reaches_the_selection(tmp_path: Path) -> None:
     radio = the_fleet.radios["qdmr"]
     selection = select(radio, STEP_UPSTREAM, own)
     described = [
-        (c.name, c.tx_hz, c.rx_only, c.tone_tx, c.tone_rx, c.tx_talkgroup, radio.power_value(c.power))
-        for c in selection.channels
+        (c.name, c.tx_hz, c.rx_only, c.tone_tx, c.tone_rx, c.tx_talkgroup, c.power) for c in selection.channels
     ]
     assert described == [
         ("Freenet", 149_025_000, True, None, None, None, "Mid"),
@@ -351,8 +350,8 @@ def test_channel_data_of_step_8b_reaches_the_selection(tmp_path: Path) -> None:
 
     chirp = select(the_fleet.radios["chirp"], STEP_UPSTREAM, own)
     assert [(c.name, c.power) for c in chirp.channels if c.callsign == "XX1AB"] == [
-        ("XX1AB", Power.LOW),
-        ("XX1AB", Power.LOW),
+        ("XX1AB", "1W"),
+        ("XX1AB", "1W"),
     ]
 
 
@@ -394,7 +393,7 @@ def test_a_power_that_is_not_a_level_is_the_radio_value_of_every_level(tmp_path:
     chirp = the_fleet.radios["chirp"]
     assert (chirp.power, [chirp.power_value(level) for level in Power]) == (Power.HIGH, ["5W"] * 5)
     kept = select(chirp, [c for c in STEP_UPSTREAM if c.callsign != "XX1AB"], own).channels
-    assert {chirp.power_value(channel.power) for channel in kept} == {"5W"}
+    assert {channel.power for channel in kept} == {"5W"}
 
 
 @pytest.mark.parametrize(("renderer", "fixed"), [("chirp", "5W"), ("hytera", "Middle"), ("jayt", "LOW2")])

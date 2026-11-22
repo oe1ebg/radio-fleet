@@ -1,4 +1,4 @@
-"""Power levels and receive-only channels as each renderer writes them (R2, R4), with synthetic data."""
+"""Power values and receive-only channels as each renderer writes them (R2, R4), with synthetic data."""
 
 from collections.abc import Callable
 from dataclasses import replace
@@ -9,7 +9,7 @@ import pytest
 import yaml
 
 from radio_fleet import fleet, sources
-from radio_fleet.model import Channel, Mode, Power
+from radio_fleet.model import Channel, Mode
 from radio_fleet.render import chirp, hytera, jayt, qdmr
 from radio_fleet.selection import Selection
 
@@ -23,7 +23,7 @@ HYTERA_EXPORT = yaml.safe_dump(
         }
     }
 )
-CHANNEL = Channel("XX0PW", 145_500_000, 145_500_000, Mode.FM, power=Power.HIGH)
+CHANNEL = Channel("XX0PW", 145_500_000, 145_500_000, Mode.FM)
 
 
 def qdmr_channels(selection: Selection) -> list[dict[str, Any]]:
@@ -60,17 +60,16 @@ def hytera_power(selection: Selection) -> str:
         ("hp785", "Middle", "Middle", hytera_power),
     ],
 )
-def test_a_channel_with_power_high_gets_the_radios_mapped_value_in_every_renderer(
+def test_every_renderer_writes_the_power_value_of_a_selected_channel(
     radio_id: str, value: str, written: str, power_of: Callable[[Selection], str]
 ) -> None:
     radio = fleet.load(EXAMPLES / "fleet.yaml", EXAMPLES).radios[radio_id]
-    mapped = replace(radio, power_values={**radio.power_values, Power.HIGH: value})
-    assert power_of(Selection(mapped, (CHANNEL,), (), (), (), ())) == written
+    assert power_of(Selection(radio, (replace(CHANNEL, power=value),), (), (), (), ())) == written
 
 
 def test_the_renderers_write_a_receive_only_channel_so_that_the_radio_cannot_transmit() -> None:
     radios = fleet.load(EXAMPLES / "fleet.yaml", EXAMPLES).radios
-    listen = replace(CHANNEL, name="Freenet", rx_hz=149_025_000, tx_hz=149_025_000, rx_only=True)
+    listen = replace(CHANNEL, name="Freenet", power="5W", rx_hz=149_025_000, tx_hz=149_025_000, rx_only=True)
     (written,) = qdmr_channels(Selection(radios["d878uv2plus"], (listen,), (), (), (), ()))
     assert written["rxOnly"] is True
     row = chirp.render(Selection(radios["uv5r-mini"], (listen,), (), (), (), ())).splitlines()[1]

@@ -46,7 +46,8 @@ class Position:
 class Channel:
     """One memory channel. `tx_hz` and `tone_tx` are what the radio transmits; a receive-only channel
     (`rx_only`) never transmits. `callsign` and `site` (the upstream list's name of the repeater) are set
-    on upstream channels only."""
+    on upstream channels only. `power` is a level on a channel as read, and the radio's value of it on a
+    selected channel."""
 
     name: str
     rx_hz: int
@@ -59,7 +60,7 @@ class Channel:
     time_slot: int | None = None
     tx_talkgroup: str | None = None
     rx_group_list: str | None = None
-    power: Power | None = None
+    power: Power | str | None = None
     tags: tuple[str, ...] = ()
     source: str = ""
     position: Position | None = None

@@ -167,9 +167,8 @@ class _Generator:
             fields["rxOnly"] = True
         if scan_list_id is not None:
             fields["scanListRef"] = scan_list_id
-        power = self._selection.radio.power_value(channel.power)
-        if power is not None:
-            fields["power"] = power
+        if channel.power is not None:
+            fields["power"] = channel.power
         if channel.mode is Mode.FM:
             narrow = channel.bandwidth_hz is not None and channel.bandwidth_hz <= 12_500
             fields["bandwidth"] = "Narrow" if narrow else "Wide"

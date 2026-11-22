@@ -4,7 +4,7 @@ from typing import Any
 import pytest
 
 from radio_fleet import fleet, snapshot, sources
-from radio_fleet.model import Channel, Ctcss, Dcs, Mode, Power
+from radio_fleet.model import Channel, Ctcss, Dcs, Mode
 from radio_fleet.render import qdmr
 from radio_fleet.selection import Group, Selection, select
 
@@ -171,7 +171,7 @@ def render_channels(*channels: Channel) -> list[dict[str, Any]]:
 def test_fm_and_dmr_channels_carry_their_fields() -> None:
     fm = Channel("XX0FM", 145_600_000, 145_000_000, Mode.FM, tone_tx=Ctcss(88.5), tone_rx=Dcs(23), bandwidth_hz=12_500)
     dmr = Channel(
-        "XX0DM TS2", 438_962_500, 431_462_500, Mode.DMR, color_code=1, time_slot=2, tx_talkgroup="TG91", power=Power.LOW
+        "XX0DM TS2", 438_962_500, 431_462_500, Mode.DMR, color_code=1, time_slot=2, tx_talkgroup="TG91", power="Low"
     )
     assert render_channels(fm, dmr) == [
         {

@@ -9,7 +9,7 @@ from dataclasses import dataclass, replace
 from radio_fleet import geo
 from radio_fleet.config import ConfigError
 from radio_fleet.fleet import POWER_RENDERERS, RX_ONLY_RENDERERS, Capability, DistanceRegion, GroupRule, Radio, Region
-from radio_fleet.model import Channel
+from radio_fleet.model import Channel, Power
 from radio_fleet.sources import AppliedOverride, Override, Sources, TemplateChannel, apply_overrides, expand_dmr
 
 
@@ -127,8 +127,8 @@ def _unfit(radio: Radio, channel: Channel) -> str | None:
 
 
 def _fitted(radio: Radio, channel: Channel) -> Channel:
-    """The channel as the radio holds it: its name rewritten and cut, the profile's power level when it has
-    none, and a receive-only channel's TX frequency at its RX frequency."""
+    """The channel as the radio holds it: its name rewritten and cut, its power level (or the profile's when
+    it has none) as the radio's value, and a receive-only channel's TX frequency at its RX frequency."""
     name = channel.name
     for old, new in radio.name_replacements:
         name = name.replace(old, new)
@@ -139,10 +139,11 @@ def _fitted(radio: Radio, channel: Channel) -> Channel:
             f"{channel.name!r} from {channel.source} sets the level {channel.power}; make power a level and map "
             "the levels in power_levels"
         )
-    power = channel.power if channel.power is not None else radio.power
-    if power is not None and radio.renderer in POWER_RENDERERS and radio.power_value(power) is None:
+    level = Power(channel.power) if channel.power is not None else radio.power
+    power = radio.power_value(level)
+    if level is not None and power is None and radio.renderer in POWER_RENDERERS:
         raise ConfigError(
-            f"radios.{radio.id}.power_levels: no value for the power {power} of channel {channel.name!r} "
+            f"radios.{radio.id}.power_levels: no value for the power {level} of channel {channel.name!r} "
             f"from {channel.source}"
         )
     tx_hz = channel.rx_hz if channel.rx_only else channel.tx_hz

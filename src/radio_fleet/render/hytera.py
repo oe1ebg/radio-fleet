@@ -15,7 +15,6 @@ from typing import Any
 
 import yaml
 
-from radio_fleet.fleet import Radio
 from radio_fleet.model import Channel, Ctcss, Mode, Tone
 from radio_fleet.selection import Selection
 from radio_fleet.sources import Sources
@@ -37,7 +36,7 @@ def render(selection: Selection, sources: Sources, base: str) -> str:
     except yaml.YAMLError as error:
         raise RenderError(f"the export is not valid YAML: {error}") from None
     tables = document.get("tables") if isinstance(document, dict) else None
-    _Editor(selection.radio, sources, {key: _entries(tables, key) for key in _TABLES}).edit(selection)
+    _Editor(sources, {key: _entries(tables, key) for key in _TABLES}).edit(selection)
     return yaml.safe_dump(document, sort_keys=False, allow_unicode=True, default_flow_style=False)
 
 
@@ -50,8 +49,7 @@ def _entries(tables: object, key: str) -> list[Entry]:
 
 
 class _Editor:
-    def __init__(self, radio: Radio, sources: Sources, tables: dict[str, list[Entry]]) -> None:
-        self._radio = radio
+    def __init__(self, sources: Sources, tables: dict[str, list[Entry]]) -> None:
         self._sources = sources
         self._tables = tables
 
@@ -84,9 +82,8 @@ class _Editor:
             entry[f"{key}_hz"] = hz
             entry.pop(f"{key}_mhz", None)
         settings = entry.setdefault("settings", {})
-        power = self._radio.power_value(channel.power)
-        if power is not None:
-            settings["power_level"] = power
+        if channel.power is not None:
+            settings["power_level"] = channel.power
         if kind == "analog":
             narrow = channel.bandwidth_hz is not None and channel.bandwidth_hz <= 12_500
             settings["channel_spacing"] = "12.5" if narrow else "25"

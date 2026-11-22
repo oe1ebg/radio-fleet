@@ -2,7 +2,8 @@
 data root's `applied.yaml`.
 
 A channel is recorded as its name and the fields the radio holds, each as text, so that two builds compare
-by name and field whatever renderer wrote the file. The power is the radio's value of the channel's level.
+by name and field whatever renderer wrote the file. The power is the radio's value, as the selection
+holds it.
 """
 
 from __future__ import annotations
@@ -17,7 +18,6 @@ import yaml
 
 from radio_fleet import config
 from radio_fleet.config import Node
-from radio_fleet.fleet import Radio
 from radio_fleet.model import Channel, Ctcss, Dcs, Tone
 from radio_fleet.selection import Drop, Selection, mhz
 from radio_fleet.sources import AppliedOverride, Override
@@ -29,19 +29,19 @@ def _text(value: object) -> str | None:
     return None if value is None else str(value)
 
 
-_FIELDS: dict[str, Callable[[Channel, Radio], str | None]] = {
-    "rx": lambda channel, _: mhz(channel.rx_hz),
-    "tx": lambda channel, _: mhz(channel.tx_hz),
-    "mode": lambda channel, _: str(channel.mode),
-    "tone_tx": lambda channel, _: None if channel.tone_tx is None else tone(channel.tone_tx),
-    "tone_rx": lambda channel, _: None if channel.tone_rx is None else tone(channel.tone_rx),
-    "bandwidth": lambda channel, _: None if channel.bandwidth_hz is None else f"{channel.bandwidth_hz / 1000:g} kHz",
-    "color_code": lambda channel, _: _text(channel.color_code),
-    "time_slot": lambda channel, _: _text(channel.time_slot),
-    "tx_talkgroup": lambda channel, _: _text(channel.tx_talkgroup),
-    "rx_group_list": lambda channel, _: _text(channel.rx_group_list),
-    "power": lambda channel, radio: radio.power_value(channel.power),
-    "rx_only": lambda channel, _: "yes" if channel.rx_only else None,
+_FIELDS: dict[str, Callable[[Channel], str | None]] = {
+    "rx": lambda channel: mhz(channel.rx_hz),
+    "tx": lambda channel: mhz(channel.tx_hz),
+    "mode": lambda channel: str(channel.mode),
+    "tone_tx": lambda channel: None if channel.tone_tx is None else tone(channel.tone_tx),
+    "tone_rx": lambda channel: None if channel.tone_rx is None else tone(channel.tone_rx),
+    "bandwidth": lambda channel: None if channel.bandwidth_hz is None else f"{channel.bandwidth_hz / 1000:g} kHz",
+    "color_code": lambda channel: _text(channel.color_code),
+    "time_slot": lambda channel: _text(channel.time_slot),
+    "tx_talkgroup": lambda channel: _text(channel.tx_talkgroup),
+    "rx_group_list": lambda channel: _text(channel.rx_group_list),
+    "power": lambda channel: channel.power,
+    "rx_only": lambda channel: "yes" if channel.rx_only else None,
 }
 FIELDS = tuple(_FIELDS)
 """The fields of a channel record besides its name, in the order they are written and compared."""
@@ -65,8 +65,8 @@ class Applied:
     channels: tuple[ChannelRecord, ...]
 
 
-def channel_record(channel: Channel, radio: Radio) -> dict[str, str]:
-    values = {field: text(channel, radio) for field, text in _FIELDS.items()}
+def channel_record(channel: Channel) -> dict[str, str]:
+    values = {field: text(channel) for field, text in _FIELDS.items()}
     return {"name": channel.name} | {field: value for field, value in values.items() if value is not None}
 
 
@@ -106,7 +106,7 @@ def _value(value: object, key: str) -> str:
 
 def write_build(selection: Selection, directory: Path) -> None:
     document = {
-        "channels": [channel_record(channel, selection.radio) for channel in selection.channels],
+        "channels": [channel_record(channel) for channel in selection.channels],
         "drops": [{"name": drop.name, "reason": drop.reason} for drop in selection.drops],
         "overrides": [override_text(applied) for applied in selection.overrides],
         "unmatched_overrides": [unmatched_text(override) for override in selection.unmatched_overrides],

@@ -9,7 +9,7 @@ import pytest
 from radio_fleet import fleet
 from radio_fleet.cli import main
 from radio_fleet.fleet import PrefixRegion, Radio, Region
-from radio_fleet.model import Channel, Ctcss, Dcs, Mode, Power, Tone
+from radio_fleet.model import Channel, Ctcss, Dcs, Mode, Tone
 from radio_fleet.render import chirp
 from radio_fleet.render.csvcheck import CsvCheckError
 from radio_fleet.selection import Drop, Selection, select
@@ -41,7 +41,7 @@ def fm(
     tone_tx: Tone | None = None,
     tone_rx: Tone | None = None,
     bandwidth_hz: int | None = None,
-    power: Power | None = Power.HIGH,
+    power: str | None = "5W",
 ) -> Channel:
     return Channel(name, rx, tx, Mode.FM, tone_tx, tone_rx, bandwidth_hz, power=power, source="synthetic")
 
@@ -50,8 +50,8 @@ def test_repeater_simplex_ctcss_and_dcs_channels_give_the_expected_rows() -> Non
     assert render(
         fm("XX0SX", 145_500_000, 145_500_000, bandwidth_hz=25_000),
         fm("XX0RP", 145_612_500, 145_012_500, tone_tx=Ctcss(88.5), bandwidth_hz=12_500),
-        fm("XX0UP", 438_962_500, 431_362_500, tone_tx=Ctcss(123.0), tone_rx=Ctcss(123.0), power=Power.MIN),
-        fm("XX0DC", 433_600_000, 433_600_000, tone_tx=Dcs(23), tone_rx=Dcs(23), power=Power.MID),
+        fm("XX0UP", 438_962_500, 431_362_500, tone_tx=Ctcss(123.0), tone_rx=Ctcss(123.0), power="0.5W"),
+        fm("XX0DC", 433_600_000, 433_600_000, tone_tx=Dcs(23), tone_rx=Dcs(23), power="2W"),
         fm("XX0MI", 431_037_500, 438_637_500),
     ) == [
         "1,XX0SX,145.500000,,0.000000,,88.5,88.5,023,NN,023,Tone->Tone,FM,12.50,,5.0W,synthetic,,,,",
@@ -92,7 +92,7 @@ def test_the_memory_limit_drops_channels_with_a_reason() -> None:
         own_lists=(),
     )
     upstream = [
-        replace(fm(f"XX0A{i}", 145_500_000 + i * 12_500, 145_500_000 + i * 12_500), callsign=f"XX0A{i}")
+        replace(fm(f"XX0A{i}", 145_500_000 + i * 12_500, 145_500_000 + i * 12_500, power=None), callsign=f"XX0A{i}")
         for i in range(3)
     ]
     selection = select(small, upstream, Sources(EXAMPLES / "sources", {}, {}, {}, (), {}))

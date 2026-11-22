@@ -197,7 +197,7 @@ def _print(selection: Selection) -> None:
         f"{len(selection.scan_lists)} scan lists"
     )
     for channel in selection.channels:
-        print(f"  {_describe(channel, radio)}")
+        print(f"  {_describe(channel)}")
     for kind, groups in (("zone", selection.zones), ("scan list", selection.scan_lists)):
         for group in groups:
             members = [*(f"{name} (base)" for name in group.base_channels), *(c.name for c in group.channels)]
@@ -213,7 +213,7 @@ def _print(selection: Selection) -> None:
         print(f"  {unmatched_text(override)}")
 
 
-def _describe(channel: Channel, radio: fleet.Radio) -> str:
+def _describe(channel: Channel) -> str:
     parts = [f"{channel.name:<16}", f"RX {mhz(channel.rx_hz)}", f"TX {mhz(channel.tx_hz)}", str(channel.mode)]
     if channel.tone_tx is not None:
         parts.append(f"tone TX {tone(channel.tone_tx)}")
@@ -227,9 +227,8 @@ def _describe(channel: Channel, radio: fleet.Radio) -> str:
         parts.append(f"talkgroup {channel.tx_talkgroup}")
     if channel.rx_group_list is not None:
         parts.append(f"RX group {channel.rx_group_list}")
-    power = radio.power_value(channel.power)
-    if power is not None:
-        parts.append(f"power {power}")
+    if channel.power is not None:
+        parts.append(f"power {channel.power}")
     if channel.rx_only:
         parts.append("RX only")
     parts.append(f"[{channel.source}]")

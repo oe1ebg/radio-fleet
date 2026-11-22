@@ -11,7 +11,6 @@ from typing import Any
 
 import yaml
 
-from radio_fleet.fleet import Radio
 from radio_fleet.model import Channel, Ctcss, Dcs, Mode, Tone
 from radio_fleet.selection import Selection
 
@@ -32,11 +31,11 @@ def render(selection: Selection, document: str) -> str:
         raise RenderError("not a jayt radio document: expected a mapping with a channel list")
     if parsed.get("radio") != RADIO:
         raise RenderError(f"the jayt renderer writes {RADIO} channels, not those of radio {parsed.get('radio')!r}")
-    parsed["channels"] = [_channel(selection.radio, channel, slot) for slot, channel in enumerate(selection.channels)]
+    parsed["channels"] = [_channel(channel, slot) for slot, channel in enumerate(selection.channels)]
     return yaml.safe_dump(parsed, sort_keys=False, allow_unicode=True, default_flow_style=False)
 
 
-def _channel(radio: Radio, channel: Channel, slot: int) -> dict[str, Any]:
+def _channel(channel: Channel, slot: int) -> dict[str, Any]:
     if channel.mode is not Mode.FM:
         raise RenderError(f"channel {channel.name}: the {RADIO} carries FM, not {channel.mode}")
     narrow = channel.bandwidth_hz is not None and channel.bandwidth_hz <= 12_500
@@ -51,9 +50,8 @@ def _channel(radio: Radio, channel: Channel, slot: int) -> dict[str, Any]:
         "mode": "FM-N" if narrow else "FM",
         **_tone(channel),
     }
-    power = radio.power_value(channel.power)
-    if power is not None:
-        fields["tx_power"] = power.upper()
+    if channel.power is not None:
+        fields["tx_power"] = channel.power.upper()
     return fields
 
 

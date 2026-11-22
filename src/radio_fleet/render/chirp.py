@@ -11,7 +11,7 @@ from __future__ import annotations
 import csv
 import io
 
-from radio_fleet.fleet import WATTS, Capability, Radio
+from radio_fleet.fleet import WATTS, Capability
 from radio_fleet.model import Channel, Ctcss, Dcs, Mode, Tone
 from radio_fleet.render.csvcheck import CsvCheckError, check_memories, check_rows, mhz, rows
 from radio_fleet.selection import Selection
@@ -54,7 +54,7 @@ def render(selection: Selection) -> str:
     writer = csv.writer(out, lineterminator="\n")
     writer.writerow(COLUMNS)
     for number, channel in enumerate(dict.fromkeys(selection.channels), 1):
-        writer.writerow(_row(selection.radio, number, channel))
+        writer.writerow(_row(number, channel))
     return out.getvalue()
 
 
@@ -66,7 +66,7 @@ def check(text: str, capability: Capability) -> None:
     check_memories([row[1] for row in table[1:]], capability)
 
 
-def _row(radio: Radio, number: int, channel: Channel) -> list[str]:
+def _row(number: int, channel: Channel) -> list[str]:
     if channel.mode is not Mode.FM:
         raise RenderError(f"channel {channel.name}: the CHIRP renderer carries FM, not {channel.mode}")
     offset = channel.tx_hz - channel.rx_hz
@@ -82,7 +82,7 @@ def _row(radio: Radio, number: int, channel: Channel) -> list[str]:
         "NFM" if narrow else "FM",
         _step(channel, abs(offset)),
         "",
-        _power(radio, channel),
+        _power(channel),
         channel.source,
         "",
         "",
@@ -128,9 +128,9 @@ def _step(channel: Channel, offset: int) -> str:
     raise RenderError(f"channel {channel.name}: RX {mhz(channel.rx_hz)} MHz is on no CHIRP tuning step")
 
 
-def _power(radio: Radio, channel: Channel) -> str:
+def _power(channel: Channel) -> str:
     """The profile's watts; `fleet.yaml` refuses any other value of a CHIRP radio."""
-    match = WATTS.fullmatch(radio.power_value(channel.power) or "")
+    match = WATTS.fullmatch(channel.power or "")
     if match is None:
         raise RenderError(
             f"channel {channel.name}: CHIRP needs a power: give the profile a power level and its watts, "
