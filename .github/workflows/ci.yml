@@ -5,25 +5,35 @@ on:
     branches: [main]
 permissions:
   contents: read
+# One run per branch or PR; a newer push cancels the older run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   # Same commands as `just ci`.
   test:
+    name: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       - run: uv sync --locked
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run mypy
+      - run: uv run zizmor --offline .github/workflows
       - run: uv run pytest -q
 
   # Tests marked `dmrconf` against qdmr 0.15 (R5, R10). No Ubuntu LTS ships
   # qdmr 0.15 yet; Ubuntu 26.10 ships 0.15.1, so this job runs in that container.
   # Same commands as `just test-dmrconf`.
   dmrconf:
+    name: dmrconf
     runs-on: ubuntu-latest
-    container: ubuntu:26.10
+    # ubuntu:26.10, pinned by digest (multi-arch index of 2026-11-20).
+    container: ubuntu@sha256:1c2a84ae3f2a24aeb97cded5b41f0211b441662f1a188cbd2e139e7625f6f1d6
     env:
       QT_QPA_PLATFORM: offscreen
       LANG: C.UTF-8
@@ -34,6 +44,8 @@ jobs:
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends qdmr git ca-certificates
           dmrconf --version
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       - run: uv sync --locked
       # Exit code 5 means no test is marked yet (before plan step 3).

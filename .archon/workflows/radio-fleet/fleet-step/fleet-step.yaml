@@ -106,7 +106,7 @@ nodes:
         - Do not change SPEC.md or docs/PLAN.md. If the step cannot be done as
           specified, stop and report why.
         - Checks: `just ci` must pass (ruff check, ruff format --check, mypy
-          strict, pytest). Conventional Commits that name the requirement IDs.
+          strict, zizmor on .github/workflows, pytest). Conventional Commits that name the requirement IDs.
         - A test that needs dmrconf carries `@pytest.mark.dmrconf`
           (tests/conftest.py skips it when dmrconf is missing). dmrconf 0.15 is
           installed on the machine that runs this workflow: run
