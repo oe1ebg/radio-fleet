@@ -4,6 +4,7 @@ Builds the CPS files for all of my radios from one channel source: the ÖVSV rep
 
 The radios are AnyTone (qdmr), Baofeng/Retevis (CHIRP), Yaesu (ADMS, jayt) and Hytera (a private tool). Each radio has a profile in `fleet.yaml` of the data root.
 
+- How to use it: [`docs/`](docs/README.md), starting with the [tutorial](docs/tutorial.md)
 - What it does and must do: [`SPEC.md`](SPEC.md)
 - Order of work: [`docs/PLAN.md`](docs/PLAN.md)
 - Rules: [`AGENTS.md`](AGENTS.md)
