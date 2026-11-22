@@ -5,6 +5,7 @@ import shutil
 import subprocess
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -53,6 +54,31 @@ def test_publish_refuses_an_existing_target_and_leaves_it_unchanged(
     assert capsys.readouterr().err == f"fleet publish: {target} exists; publish never overwrites a file\n"
     assert [path.name for path in target.iterdir()] == ["notes.txt"]
     assert (target / "notes.txt").read_text() == "hand-made"
+
+
+def test_a_failed_copy_leaves_no_target_and_a_later_publish_succeeds(
+    data: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    copy = shutil.copyfileobj
+    calls = []
+
+    def fail_second(*args: Any) -> None:
+        calls.append(args)
+        if len(calls) == 2:
+            raise OSError("No space left on device")
+        copy(*args)
+
+    monkeypatch.setattr(shutil, "copyfileobj", fail_second)
+    target = data / "equipment" / "uv5r-mini" / "generated" / "2026-05-06"
+    assert run(data, "publish", "uv5r-mini") == 1
+    assert capsys.readouterr().err == (
+        f"fleet publish: copying to {target} failed, nothing published: No space left on device\n"
+    )
+    assert not target.exists()
+
+    monkeypatch.setattr(shutil, "copyfileobj", copy)
+    assert run(data, "publish", "uv5r-mini") == 0
+    assert sorted(path.name for path in target.iterdir()) == ["selection.yaml", "uv5r-mini.csv"]
 
 
 @pytest.mark.parametrize(

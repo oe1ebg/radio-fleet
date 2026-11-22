@@ -8,7 +8,8 @@ by name and field whatever renderer wrote the file.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping
+import os
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,19 +22,27 @@ from radio_fleet.selection import Drop, Selection, mhz
 from radio_fleet.sources import AppliedOverride
 
 RECORD = "selection.yaml"
-FIELDS = (
-    "rx",
-    "tx",
-    "mode",
-    "tone_tx",
-    "tone_rx",
-    "bandwidth",
-    "color_code",
-    "time_slot",
-    "tx_talkgroup",
-    "rx_group_list",
-    "power",
-)
+
+
+def _text(value: object) -> str | None:
+    return None if value is None else str(value)
+
+
+_FIELDS: dict[str, Callable[[Channel], str | None]] = {
+    "rx": lambda channel: mhz(channel.rx_hz),
+    "tx": lambda channel: mhz(channel.tx_hz),
+    "mode": lambda channel: str(channel.mode),
+    "tone_tx": lambda channel: None if channel.tone_tx is None else tone(channel.tone_tx),
+    "tone_rx": lambda channel: None if channel.tone_rx is None else tone(channel.tone_rx),
+    "bandwidth": lambda channel: None if channel.bandwidth_hz is None else f"{channel.bandwidth_hz / 1000:g} kHz",
+    "color_code": lambda channel: _text(channel.color_code),
+    "time_slot": lambda channel: _text(channel.time_slot),
+    "tx_talkgroup": lambda channel: _text(channel.tx_talkgroup),
+    "rx_group_list": lambda channel: _text(channel.rx_group_list),
+    "power": lambda channel: _text(channel.power),
+}
+FIELDS = tuple(_FIELDS)
+"""The fields of a channel record besides its name, in the order they are written and compared."""
 
 ChannelRecord = Mapping[str, str]
 """`name` and the fields of FIELDS the channel has."""
@@ -54,20 +63,8 @@ class Applied:
 
 
 def channel_record(channel: Channel) -> dict[str, str]:
-    values: dict[str, object] = {
-        "rx": mhz(channel.rx_hz),
-        "tx": mhz(channel.tx_hz),
-        "mode": channel.mode,
-        "tone_tx": tone(channel.tone_tx) if channel.tone_tx is not None else None,
-        "tone_rx": tone(channel.tone_rx) if channel.tone_rx is not None else None,
-        "bandwidth": f"{channel.bandwidth_hz / 1000:g} kHz" if channel.bandwidth_hz is not None else None,
-        "color_code": channel.color_code,
-        "time_slot": channel.time_slot,
-        "tx_talkgroup": channel.tx_talkgroup,
-        "rx_group_list": channel.rx_group_list,
-        "power": channel.power,
-    }
-    return {"name": channel.name} | {key: str(value) for key, value in values.items() if value is not None}
+    values = {field: text(channel) for field, text in _FIELDS.items()}
+    return {"name": channel.name} | {field: value for field, value in values.items() if value is not None}
 
 
 def tone(tone: Tone) -> str:
@@ -131,7 +128,9 @@ def save_applied(path: Path, applied: Mapping[str, Applied]) -> None:
         radio_id: {"date": entry.date, "digest": entry.digest, "channels": [dict(c) for c in entry.channels]}
         for radio_id, entry in applied.items()
     }
-    path.write_text(_dump(document), encoding="utf-8")
+    partial = path.with_name(path.name + ".partial")
+    partial.write_text(_dump(document), encoding="utf-8")
+    os.replace(partial, path)
 
 
 def digest(directory: Path) -> str:

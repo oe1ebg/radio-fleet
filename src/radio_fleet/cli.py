@@ -101,11 +101,12 @@ def main(
             output = build.build(selection, own, build_dir, dmrconf or DmrconfCli(), McpCli(), jayt, hytera)
         except build.BuildError as error:
             print(f"fleet build: {args.radio}: {error}", file=sys.stderr)
+            output = None
+        reported = _write_changes(the_fleet, build_dir, data_root / "applied.yaml")
+        if output is None:
             return 1
-        finally:
-            changes.write(the_fleet.radios.values(), build_dir, data_root / "applied.yaml")
         print(f"{args.radio}: {output}")
-        return 0
+        return 0 if reported else 1
     except (ConfigError, snapshot.SnapshotError, publish.PublishError) as error:
         print(f"fleet {args.command}: {error}", file=sys.stderr)
         return 1
@@ -140,6 +141,16 @@ def _fetch(names: list[str], snapshots_dir: Path, offline: bool, fetcher: Fetche
     return 1 if failed else 0
 
 
+def _write_changes(the_fleet: fleet.Fleet, build_dir: Path, applied_file: Path) -> bool:
+    """Rewrite CHANGES.md; a failure is reported on its own and never hides the command's result."""
+    try:
+        changes.write(the_fleet.radios.values(), build_dir, applied_file)
+    except (ConfigError, OSError, UnicodeDecodeError) as error:
+        print(f"fleet: {changes.FILE} not written: {error}", file=sys.stderr)
+        return False
+    return True
+
+
 def _record(command: str, the_fleet: fleet.Fleet, data_root: Path, radio_id: str, today: date) -> int:
     _radio(the_fleet, radio_id)
     build_dir = data_root / "build"
@@ -151,10 +162,10 @@ def _record(command: str, the_fleet: fleet.Fleet, data_root: Path, radio_id: str
         return 0
     applied_file = data_root / "applied.yaml"
     entry, tag = publish.applied(build_dir / radio_id, applied_file, radio_id, today)
-    changes.write(the_fleet.radios.values(), build_dir, applied_file)
+    reported = _write_changes(the_fleet, build_dir, applied_file)
     print(f"{radio_id}: {entry.digest} in {applied_file}")
     print(f"git tag {tag}")
-    return 0
+    return 0 if reported else 1
 
 
 def _selection(

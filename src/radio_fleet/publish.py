@@ -28,12 +28,20 @@ def publish(build: Path, equipment: Path, radio_id: str, today: date) -> Path:
         target.mkdir()
     except FileExistsError:
         raise PublishError(f"{target} exists; publish never overwrites a file") from None
+    try:
+        _copy(build, target)
+    except OSError as error:
+        shutil.rmtree(target)
+        raise PublishError(f"copying to {target} failed, nothing published: {error}") from error
+    return target
+
+
+def _copy(build: Path, target: Path) -> None:
     for file in sorted(path for path in build.rglob("*") if path.is_file()):
         copy = target / file.relative_to(build)
         copy.parent.mkdir(parents=True, exist_ok=True)
         with file.open("rb") as source, copy.open("xb") as destination:
             shutil.copyfileobj(source, destination)
-    return target
 
 
 def applied(build: Path, applied_file: Path, radio_id: str, today: date) -> tuple[Applied, str]:
