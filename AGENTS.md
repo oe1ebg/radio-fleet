@@ -31,7 +31,8 @@ Python 3.12, uv. Runtime dependencies: memory-channels-processor (git, pinned ta
     - secrets;
     - real codeplug exports.
   - Tests use synthetic data only. Never print keys, passwords, serial numbers or MAC addresses.
-- **External tools behind adapters.** qdmr/dmrconf, jayt and hytera_reverse are external CLIs. Each one is called through one adapter class with a fake for tests. Do not copy code from those repositories. A missing feature in a tool is reported, not patched here.
+- **External tools behind adapters.** qdmr/dmrconf, jayt and the owner's private Hytera tool are external CLIs. Each one is called through one adapter class with a fake for tests. Do not copy code from those repositories. A missing feature in a tool is reported, not patched here.
+- **Public repository.** Never name the owner's private repositories (jayt is the exception) and never write a local path, in code, commits, PRs or docs. A private tool is named by its role, for example "the Hytera tool"; its paths and command lines live in the data-root `fleet.yaml`.
 - **Tests are data-free and offline.** No test needs network, a real radio file or an installed radio tool. A test that needs `dmrconf` skips when it is missing.
 - **Commits:** Conventional Commits (`feat(render): ...`). Small PRs, one plan step each. Never merge, never force-push. Merging is the owner's step.
 

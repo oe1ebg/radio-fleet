@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
@@ -106,11 +107,20 @@ class Radio:
 
 
 @dataclass(frozen=True, slots=True)
+class Tool:
+    """An external tool's executable and the commit it was built from."""
+
+    path: Path
+    commit: str
+
+
+@dataclass(frozen=True, slots=True)
 class Fleet:
     file: str
     sources: tuple[str, ...]
     radios: Mapping[str, Radio]
-    hytera_reverse: Path | None
+    jayt: Tool | None = None
+    hytera_reverse: Path | None = None
 
     def check_references(self, sources: Sources) -> None:
         """Every file the fleet names must exist: the hytera_reverse checkout, and of each profile its own
@@ -132,14 +142,28 @@ class Fleet:
 
 
 def load(path: Path, data_root: Path) -> Fleet:
-    """Paths in the file, such as bases and tools, are relative to the data root (R13), not to the file."""
-    fields = config.load(path).fields(["sources", "radios"], ["hytera_reverse"])
+    """Paths in the file, such as bases, are relative to the data root (R13), not to the file."""
+    fields = config.load(path).fields(["sources", "radios"], ["tools", "hytera_reverse"])
     sources = fields["sources"].texts()
     if not sources:
         raise fields["sources"].error("name at least one source")
     radios = {radio_id: _radio(radio_id, node, data_root) for radio_id, node in fields["radios"].entries().items()}
+    tools = fields["tools"].fields((), ["jayt"]) if "tools" in fields else {}
+    jayt = _tool(tools["jayt"], data_root) if "jayt" in tools else None
     hytera_reverse = data_root / fields["hytera_reverse"].text() if "hytera_reverse" in fields else None
-    return Fleet(str(path), sources, radios, hytera_reverse)
+    return Fleet(str(path), sources, radios, jayt, hytera_reverse)
+
+
+_COMMIT = re.compile(r"[0-9a-f]{7,40}")
+
+
+def _tool(node: Node, data_root: Path) -> Tool:
+    fields = node.fields(["path", "commit"])
+    commit = fields["commit"].text()
+    if not _COMMIT.fullmatch(commit):
+        raise fields["commit"].error("expected a git commit: 7 to 40 hex digits")
+    # Absolute, so that a bare name such as `jayt` is the file in the data root and not a PATH lookup.
+    return Tool((data_root / fields["path"].text()).absolute(), commit)
 
 
 def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:

@@ -11,6 +11,7 @@ from radio_fleet import __version__, build, fleet, snapshot, sources
 from radio_fleet.config import ConfigError
 from radio_fleet.dmrconf import Dmrconf, DmrconfCli
 from radio_fleet.hytera_reverse import HyteraReverseCli, HyteraTool
+from radio_fleet.jayt import Jayt, JaytCli
 from radio_fleet.mcp import Fetcher, FetchError, McpCli
 from radio_fleet.model import Channel, Ctcss, Dcs, Tone
 from radio_fleet.selection import Selection, mhz, select
@@ -20,6 +21,7 @@ def main(
     argv: list[str] | None = None,
     fetcher: Fetcher | None = None,
     dmrconf: Dmrconf | None = None,
+    jayt: Jayt | None = None,
     hytera: HyteraTool | None = None,
 ) -> int:
     parser = argparse.ArgumentParser(
@@ -76,9 +78,11 @@ def main(
         if args.command == "select":
             _print(selection)
             return 0
+        if jayt is None and the_fleet.jayt is not None:
+            jayt = JaytCli(the_fleet.jayt.path, the_fleet.jayt.commit)
         if hytera is None and the_fleet.hytera_reverse is not None:
             hytera = HyteraReverseCli(the_fleet.hytera_reverse)
-        output = build.build(selection, own, data_root / "build", dmrconf or DmrconfCli(), hytera)
+        output = build.build(selection, own, data_root / "build", dmrconf or DmrconfCli(), McpCli(), jayt, hytera)
         print(f"{args.radio}: {output}")
         return 0
     except build.BuildError as error:
