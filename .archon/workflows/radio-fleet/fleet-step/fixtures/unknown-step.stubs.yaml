@@ -1,0 +1,11 @@
+# A step that is not in docs/PLAN.md: the real preflight runs, reports ok=false,
+# and `refuse` fails the run. `deliver` has no stubs, so the fixture fails if it runs.
+# Guards the input contract: a preflight that reads $INPUTS.step instead of
+# $INPUTS_STEP fails in `preflight`, not in `refuse`, and this fixture catches it.
+exec-code: true
+fixture:
+  inputs:
+    step: "99"
+  expect: failed
+  fail-node: refuse
+  reached: [preflight]

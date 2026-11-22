@@ -10,7 +10,9 @@ radio-fleet builds a checked CPS file for every radio of the owner from upstream
 
 ```sh
 uv sync            # once
-just ci            # the checks CI and the Archon workflow run (uv sync --locked + pytest)
+just ci            # the checks CI and the Archon workflow run (uv sync --locked, ruff, mypy strict, pytest)
+just test-dmrconf  # tests marked `dmrconf`; fails instead of skipping when dmrconf is missing
+just workflow-test # replays the fleet-step fixtures (needs archon)
 uv run fleet --help
 ```
 
