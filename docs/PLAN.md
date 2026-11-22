@@ -20,10 +20,11 @@ Change `fleet-step` only together with its fixtures; `just workflow-test` replay
 |---|---|---|
 | 1 | R1, R2 | `radio_fleet.model`, MCP fetch to `snapshots/`, snapshot reader; `fleet fetch`. |
 | 2 | R3, R4 | Own lists, talkgroups, overrides, DMR templates; `fleet.yaml` schema and selection; `fleet select --radio R` prints the selection and the drops. Example `fleet.yaml` with every radio of SPEC.md. |
+| 2b | R13, G2 | Data root: `--data` and `FLEET_DATA`; a named file that is missing is an error. Move `fleet.yaml`, `sources/` and `snapshots/` to `examples/` with synthetic data only (replace the locator `JN88ee`). Tests that read example data use `examples/`. Update the layout in README.md and AGENTS.md. |
 | 3 | R5, R10 | qdmr renderer and `dmrconf verify` gate; `fleet build --radio R`. |
 | 4 | R6, R7 | CHIRP and FT5D renderers. |
 | 5 | R8 | jayt adapter and Yaesu renderer (FT-3185 first). |
 | 6 | R9 | hytera_reverse adapter and Hytera renderer. |
 | 7 | R11, R12 | `CHANGES.md`, `fleet publish`, `fleet applied`. |
 
-After step 2, the owner seeds the own lists from the current configs (local, with real data, not in a workflow run). After each renderer step, the owner builds the real radio once and checks `CHANGES.md` against today's hand-made config.
+After step 2b, the owner creates the private data repository (R13) and seeds the own lists from the current configs there (local, with real data, not in a workflow run). Real qdmr bases go to that repository, not to `bases/` here; step 3 tests use synthetic bases. After each renderer step, the owner builds the real radio once with `--data` and checks `CHANGES.md` against today's hand-made config.
