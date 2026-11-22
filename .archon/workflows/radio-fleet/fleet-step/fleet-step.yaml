@@ -44,9 +44,48 @@ nodes:
       echo "step $INPUTS_STEP is not in docs/PLAN.md" >&2
       exit 1
 
+  # Commits of this run are signed by the automation identity (ebirn-machine), not
+  # the owner's key. The identity comes from FACTORY_SIGNING_CONFIG (~/.archon/.env),
+  # the same identity.json Factory uses. It is set in this run's worktree only
+  # (git config --worktree), never in the owner's checkout.
+  - id: signer
+    depends_on: [preflight]
+    when: "$preflight.output.ok == true"
+    bash: |
+      set -eu
+      : "${FACTORY_SIGNING_CONFIG:?FACTORY_SIGNING_CONFIG is not set (see ~/.archon/.env)}"
+      field() { python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$FACTORY_SIGNING_CONFIG" "$1"; }
+      if [ "$(git rev-parse --absolute-git-dir)" = "$(git rev-parse --path-format=absolute --git-common-dir)" ]; then
+        echo "not in a run worktree: refusing to change the signing identity" >&2
+        exit 1
+      fi
+      name=$(field name)
+      email=$(field email)
+      key=$(field private_key)
+      allowed=$(field allowed_signers)
+      python3 -c 'import os, stat, sys; sys.exit(stat.S_IMODE(os.stat(sys.argv[1]).st_mode) != 0o600)' "$key" \
+        || { echo "automation key permissions are not 600" >&2; exit 1; }
+      human=$(git config --global --get user.signingkey || true)
+      case "$human" in
+        "$key" | "$key.pub") echo "the automation key is the owner's signing key" >&2; exit 1 ;;
+      esac
+      git config extensions.worktreeConfig true
+      git config --worktree user.name "$name"
+      git config --worktree user.email "$email"
+      git config --worktree gpg.format ssh
+      git config --worktree gpg.ssh.program ssh-keygen
+      git config --worktree gpg.ssh.allowedSignersFile "$allowed"
+      git config --worktree user.signingkey "$key"
+      git config --worktree commit.gpgsign true
+      # Prove it: sign an unreferenced commit and check its signer.
+      probe=$(git commit-tree -S -m "signing probe" "HEAD^{tree}")
+      test "$(git log -1 --format=%G?/%GS "$probe")" = "G/$email" \
+        || { echo "signing probe is not signed by $email" >&2; exit 1; }
+      echo "commits are signed as $email" >&2
+
   - id: deliver
     include: archon-deliver
-    depends_on: [preflight]
+    depends_on: [signer]
     when: "$preflight.output.ok == true"
     with:
       work: |-
@@ -71,5 +110,28 @@ nodes:
           installed on the machine that runs this workflow: run
           `just test-dmrconf` and put its result in the PR description. The CI
           job `dmrconf` runs these tests too.
+        - Commits are signed by the automation identity, which this worktree's
+          git config already sets. Commit normally. Do not change git config, do
+          not pass signing or identity flags (`--no-gpg-sign`, `-c user.*`), and
+          do not re-sign or rewrite commits.
 
         $INPUTS.note
+
+  # Every commit the run added must carry the automation identity's signature.
+  - id: verify-signer
+    depends_on: [deliver]
+    bash: |
+      set -eu
+      field() { python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$FACTORY_SIGNING_CONFIG" "$1"; }
+      email=$(field email)
+      allowed=$(field allowed_signers)
+      git fetch -q origin main
+      bad=0
+      for c in $(git rev-list origin/main..HEAD); do
+        got=$(git -c gpg.ssh.allowedSignersFile="$allowed" log -1 --format=%G?/%GS "$c")
+        if [ "$got" != "G/$email" ]; then
+          echo "not signed by $email: $(git log -1 --format='%h %s' "$c") ($got)" >&2
+          bad=1
+        fi
+      done
+      exit "$bad"
