@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -100,6 +101,45 @@ channels:
         "synthetic",
     )
     assert (d1.tx_hz, d1.time_slot, d1.tx_talkgroup, d1.rx_group_list) == (433_450_000, 2, "TG1", "Both")
+
+
+EVERY_KEY = {
+    "name": "D1",
+    "rx": 433.4,
+    "tx": 433.45,
+    "mode": "DMR",
+    "tone_tx": {"ctcss": 77.0},
+    "tone_rx": {"dcs": 23},
+    "bandwidth": 12.5,
+    "color_code": 1,
+    "time_slot": 2,
+    "tx_talkgroup": "TG1",
+    "rx_group_list": "Both",
+    "power": "Low",
+    "tags": ["quiet"],
+}
+
+
+def test_every_channel_key_is_read_into_its_field(tmp_path: Path) -> None:
+    assert set(EVERY_KEY) == set(sources._CHANNEL_KEYS)
+    write(tmp_path, {"talkgroups.yaml": TALKGROUPS, "own/a.yaml": json.dumps({"name": "a", "channels": [EVERY_KEY]})})
+    (channel,) = sources.load(tmp_path).own_lists["a"].channels
+    assert channel == Channel(
+        "D1",
+        433_400_000,
+        433_450_000,
+        Mode.DMR,
+        tone_tx=Ctcss(77.0),
+        tone_rx=Dcs(23),
+        bandwidth_hz=12_500,
+        color_code=1,
+        time_slot=2,
+        tx_talkgroup="TG1",
+        rx_group_list="Both",
+        power="Low",
+        tags=("quiet",),
+        source="a",
+    )
 
 
 @pytest.mark.parametrize(

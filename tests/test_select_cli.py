@@ -49,7 +49,8 @@ def test_select_prints_the_channels_drops_and_overrides(tmp_path: Path, capsys: 
     (tmp_path / "fleet.yaml").write_text(FLEET)
     (tmp_path / "sources").mkdir()
     (tmp_path / "sources" / "overrides.yaml").write_text(
-        "overrides: [{callsign: XX0FM, reason: synthetic reason, set: {tone_tx: {ctcss: 77.0}, rx: 145.6125}}]\n"
+        "overrides: [{callsign: XX0FM, reason: synthetic reason,"
+        " set: {tone_tx: {ctcss: 77.0}, rx: 145.6125, bandwidth: 12.5}}]\n"
     )
     snapshot.write(tmp_path / "snapshots", "synthetic-db", mcp_csv([FM_REPEATER, DMR_REPEATER]))
     args = ["--fleet", str(tmp_path / "fleet.yaml"), "--snapshots", str(tmp_path / "snapshots")]
@@ -58,7 +59,7 @@ def test_select_prints_the_channels_drops_and_overrides(tmp_path: Path, capsys: 
     assert out.startswith("synthetic (Synthetic 2m FM): 1 channels, 0 zones\n")
     assert re.search(r"XX0FM +RX 145.61250 TX 145.00000 FM tone TX CTCSS 77 tone RX CTCSS 88.5", out)
     assert "  XX0DM: mode DMR not supported\n" in out
-    assert "  XX0FM FM: tone_tx=CTCSS 77, rx_hz=145.61250 MHz (synthetic reason)\n" in out
+    assert "  XX0FM FM: tone_tx=CTCSS 77, rx_hz=145.61250 MHz, bandwidth_hz=12.5 kHz (synthetic reason)\n" in out
 
 
 def headless_snapshot(directory: Path) -> None:
@@ -71,6 +72,7 @@ def headless_snapshot(directory: Path) -> None:
     [
         (lambda d: None, "no snapshot for 'synthetic-db'"),
         (headless_snapshot, "lacks columns"),
+        (lambda d: (d / "fleet.yaml").unlink(), "no file"),
         (lambda d: (d / "fleet.yaml").write_text(FLEET.replace("XX0", "[XX0")), "fleet.yaml"),
         (lambda d: (d / "fleet.yaml").write_text(FLEET.replace("  synthetic:", "  other:")), "no radio 'synthetic'"),
     ],

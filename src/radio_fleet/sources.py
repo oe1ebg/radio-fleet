@@ -256,6 +256,8 @@ def _channel_fields(fields: Mapping[str, Node], names: _Names) -> ChannelFields:
                 values["power"] = node.text()
             case "tags":
                 values["tags"] = node.texts()
+            case _:
+                raise AssertionError(f"channel key {key!r} has no reader")
     return values
 
 
