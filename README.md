@@ -8,7 +8,7 @@ The radios are AnyTone (qdmr), Baofeng/Retevis (CHIRP), Yaesu (ADMS, jayt) and H
 - Order of work: [`docs/PLAN.md`](docs/PLAN.md)
 - Rules: [`AGENTS.md`](AGENTS.md)
 
-Status: `fleet fetch` snapshots the upstream sources named in `fleet.yaml` (or by `--source`) to `snapshots/` (`--offline` reads the existing snapshots). `fleet select --radio R` prints the channels, zones, drops with their reasons, and applied overrides of one radio from the snapshots and `sources/`. No radio is built yet.
+Status: `fleet fetch` snapshots the upstream sources named in `fleet.yaml` (or by `--source`) to `snapshots/` (`--offline` reads the existing snapshots). `fleet select --radio R` prints the channels, zones, drops with their reasons, and applied overrides of one radio from the snapshots and `sources/`. `fleet build --radio R` merges that selection into the radio's qdmr base (AnyTone) and writes `build/R/R.yaml` only when `dmrconf verify` passes for the profile's `dmrconf_radio`; a failed check exits 1 with the radio and dmrconf's message. Generated objects have ids that start with `gen_`; everything else of the base is kept. The other renderers come with the next plan steps.
 
 ## Data root
 
@@ -29,6 +29,7 @@ This repository has only synthetic example data, in [`examples/`](examples), whi
 
 ```sh
 uv run fleet select --data examples --radio d878uv2plus
+uv run fleet build --data examples --radio d878uv2plus   # needs dmrconf (qdmr 0.15)
 ```
 
 Upstream repeater data: ÖVSV, CC BY 4.0.

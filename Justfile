@@ -10,9 +10,8 @@ test:
     uv run pytest -q
 
 # Tests that need dmrconf (qdmr 0.15); fails instead of skipping when dmrconf is missing.
-# Exit code 5 means no test is marked yet (before plan step 3); that is not a failure.
 test-dmrconf:
-    FLEET_REQUIRE_DMRCONF=1 uv run pytest -q -m dmrconf || test $? -eq 5
+    FLEET_REQUIRE_DMRCONF=1 uv run pytest -q -m dmrconf
 
 # Replays the fleet-step fixtures (needs the archon CLI; local only, not in CI).
 workflow-test:
