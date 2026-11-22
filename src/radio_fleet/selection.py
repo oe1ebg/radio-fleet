@@ -133,6 +133,12 @@ def _fitted(radio: Radio, channel: Channel) -> Channel:
     for old, new in radio.name_replacements:
         name = name.replace(old, new)
     name = name[: radio.capability.name_length].rstrip()
+    if channel.power is not None and radio.fixed_power is not None:
+        raise ConfigError(
+            f"radios.{radio.id}.power: {radio.fixed_power!r} is the power of every channel, but channel "
+            f"{channel.name!r} from {channel.source} sets the level {channel.power}; make power a level and map "
+            "the levels in power_levels"
+        )
     power = channel.power if channel.power is not None else radio.power
     if power is not None and radio.renderer in POWER_RENDERERS and radio.power_value(power) is None:
         raise ConfigError(

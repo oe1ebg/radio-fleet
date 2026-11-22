@@ -74,6 +74,8 @@ Selection checks only the RX frequency of a receive-only channel against the rad
   fleet select: radios.uv5r-mini.power_levels: no value for the power Low of channel 'Hill 2m' from hills
   ```
 
+  A profile whose `power` is a radio value, such as `power: 5W`, gives no level a value, so a channel with a level fails its selection the same way: `radios.uv5r-mini.power: '5W' is the power of every channel, but channel 'Hill 2m' from hills sets the level Low; ...`. Make the profile's `power` a level and add `power_levels`.
+
   A radio value in a list, such as `power: 5W`, is refused: `sources/own/hills.yaml: channels[0].power: power is a level: Max, High, Mid, Low, Min; the radio profile maps it to the radio's value`.
 - A DMR channel names its talkgroup and RX group list by name. Define them first: see [Talkgroups and RX group lists](talkgroups.md).
 - The list's `tags` and the channel's `tags` both go to the channel. A zone or scan-list rule can select channels by tag or by `source: hills`.

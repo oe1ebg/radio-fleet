@@ -73,6 +73,7 @@ Messages start with `fleet <command>:`. A build error also names the radio: `fle
 | Message | Cause and fix |
 |---|---|
 | `radios.R.power_levels: no value for the power L of channel 'C' from S` | The channel has the level `L`, from its own list or source `S` or from an override, and the profile maps no value for it. Add `L` to `power_levels`. `fleet select` fails the same way. |
+| `radios.R.power: 'V' is the power of every channel, but channel 'C' from S sets the level L; make power a level and map the levels in power_levels` | The profile's `power` is a radio value `V`, as before the levels, and the channel has its own level `L`, from its own list or source `S` or from an override. Give the profile a level as `power` and map the levels in `power_levels`. `fleet select` fails the same way. |
 | `the qdmr renderer needs a base and a dmrconf_radio in the profile` | Set both. |
 | `dmrconf is not installed: dmrconf not found` | Install qdmr 0.15, so `dmrconf` is on the `PATH`. |
 | `dmrconf verify failed:` and dmrconf's output | The codeplug does not fit the radio. Read dmrconf's message. |

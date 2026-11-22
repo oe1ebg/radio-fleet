@@ -163,6 +163,9 @@ class Radio:
     """The level of a channel that has none."""
     power_values: Mapping[Power, str]
     """The radio's value of each level; empty for a renderer that writes no power."""
+    fixed_power: str | None
+    """A `power` that is not a level: the radio's value of every channel. A channel's own level is refused,
+    because such a profile gives no level a value of its own."""
     upstream_name: str
     """The name of an upstream channel, a format with the fields callsign, band and site."""
     name_replacements: tuple[tuple[str, str], ...]
@@ -298,7 +301,7 @@ def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
         key: tuple(_group_rule(item, capability, renderer) for item in fields[key].items()) if key in fields else ()
         for key in ("zones", "scan_lists")
     }
-    power, power_values = _power(renderer, fields.get("power"), fields.get("power_levels"))
+    power, power_values, fixed_power = _power(renderer, fields.get("power"), fields.get("power_levels"))
     upstream_name, replacements = _naming(fields["naming"]) if "naming" in fields else (_UPSTREAM_NAME, ())
     templates = fields["dmr_templates"].entries() if "dmr_templates" in fields else {}
     return Radio(
@@ -317,21 +320,24 @@ def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
         scan_lists=rules["scan_lists"],
         power=power,
         power_values=power_values,
+        fixed_power=fixed_power,
         upstream_name=upstream_name,
         name_replacements=replacements,
     )
 
 
-def _power(renderer: Renderer, default: Node | None, levels: Node | None) -> tuple[Power | None, Mapping[Power, str]]:
-    """The default level and the radio's value of each level. A `power` that is not a level is the radio's
-    value of every level, as `power` was before there were levels."""
+def _power(
+    renderer: Renderer, default: Node | None, levels: Node | None
+) -> tuple[Power | None, Mapping[Power, str], str | None]:
+    """The default level, the radio's value of each level and a fixed power. A `power` that is not a level is
+    the radio's value of every channel, as `power` was before there were levels."""
     level = _level(default.text()) if default is not None else None
     values = _POWER_VALUES.get(renderer)
     if values is None:
         for node in (default if level is None else None, levels):
             if node is not None:
                 raise node.error(f"the {renderer} renderer writes no power; power takes only a level")
-        return level, {}
+        return level, {}, None
 
     def value(node: Node) -> str:
         text = node.value if isinstance(node.value, str) else ""
@@ -342,14 +348,15 @@ def _power(renderer: Renderer, default: Node | None, levels: Node | None) -> tup
     if default is not None and level is None:
         if levels is not None:
             raise default.error(f"with power_levels, power is a level: {', '.join(Power)}")
-        return Power.HIGH, dict.fromkeys(Power, value(default))
+        fixed = value(default)
+        return Power.HIGH, dict.fromkeys(Power, fixed), fixed
     mapped = dict(values.defaults)
     for name, node in (levels.entries() if levels is not None else {}).items():
         named = _level(name)
         if named is None:
             raise node.error(f"power levels are {', '.join(Power)}")
         mapped[named] = value(node)
-    return level, mapped
+    return level, mapped, None
 
 
 def _level(text: str) -> Power | None:

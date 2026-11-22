@@ -388,11 +388,31 @@ def test_a_power_level_the_profile_does_not_map_fails_with_the_profile_and_the_l
 
 
 def test_a_power_that_is_not_a_level_is_the_radio_value_of_every_level(tmp_path: Path) -> None:
-    the_fleet, _ = step(
+    the_fleet, own = step(
         tmp_path, STEP.replace("    power: High\n    power_levels: {High: 5W, Low: 1W}\n", "    power: 5W\n")
     )
     chirp = the_fleet.radios["chirp"]
     assert (chirp.power, [chirp.power_value(level) for level in Power]) == (Power.HIGH, ["5W"] * 5)
+    kept = select(chirp, [c for c in STEP_UPSTREAM if c.callsign != "XX1AB"], own).channels
+    assert {chirp.power_value(channel.power) for channel in kept} == {"5W"}
+
+
+@pytest.mark.parametrize(("renderer", "fixed"), [("chirp", "5W"), ("hytera", "Middle"), ("jayt", "LOW2")])
+def test_a_power_that_is_not_a_level_refuses_a_channel_with_its_own_level(
+    tmp_path: Path, renderer: str, fixed: str
+) -> None:
+    the_fleet, own = step(
+        tmp_path,
+        STEP.replace("renderer: chirp", f"renderer: {renderer}").replace(
+            "    power: High\n    power_levels: {High: 5W, Low: 1W}\n", f"    power: {fixed}\n"
+        ),
+    )
+    with pytest.raises(
+        ConfigError,
+        match=rf"radios\.chirp\.power: '{fixed}' is the power of every channel, but channel 'XX1AB' from "
+        r"synthetic-db sets the level Low; make power a level",
+    ):
+        select(the_fleet.radios["chirp"], STEP_UPSTREAM, own)
 
 
 @pytest.mark.parametrize(

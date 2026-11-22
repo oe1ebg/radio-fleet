@@ -149,7 +149,7 @@ power_levels: {Max: 5W, High: 5W, Mid: 2W, Low: 1W, Min: 0.5W}
 
 `fleet.yaml` is refused when a value is not one of the renderer's, naming the key, such as `radios.uv5r-mini.power_levels.Low: the chirp renderer takes the power as watts, such as 5W, not 'High'`. A channel whose level has no value fails `fleet select` and `fleet build`, naming the profile, the channel and its own list or source: `radios.uv5r-mini.power_levels: no value for the power Mid of channel 'Hill 2m' from hills`.
 
-A `power` that is not a level, such as `power: 5W`, is the radio's value of every level, as in profiles from before the levels. Such a profile takes no `power_levels`.
+A `power` that is not a level, such as `power: 5W`, is the radio's value of every channel, as in profiles from before the levels. Such a profile takes no `power_levels`, and a channel that sets its own level, in its own list or by an override, fails `fleet select` and `fleet build`: `radios.uv5r-mini.power: '5W' is the power of every channel, but channel 'Hill 2m' from hills sets the level Low; make power a level and map the levels in power_levels`.
 
 ### `naming`
 
