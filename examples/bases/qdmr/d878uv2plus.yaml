@@ -1,0 +1,31 @@
+# Synthetic qdmr base (R5). `fleet build` keeps everything here and adds the generated
+# contacts, group lists, channels and zones, whose ids start with gen_.
+version: 0.12.0
+settings:
+  defaultID: id1
+  power: High
+  tot: 0
+radioIDs:
+  - dmr: {id: id1, name: XX0SYN, number: 9990001}
+contacts:
+  - dmr: {id: cont1, name: Local 9, ring: false, type: GroupCall, number: 9}
+  - dmr: {id: cont2, name: APRS Gateway, ring: false, type: PrivateCall, number: 9990999}
+groupLists:
+  - {id: grp1, name: Local, contacts: [cont1]}
+channels:
+  - dmr:
+      id: ch1
+      name: Hotspot
+      rxFrequency: 433.6125 MHz
+      txFrequency: 433.6125 MHz
+      power: Low
+      colorCode: 1
+      timeSlot: TS2
+      groupList: grp1
+      contact: cont1
+      aprs: aprs1
+positioning:
+  - dmr: {id: aprs1, name: DMR APRS, period: 300 s, contact: cont2}
+zones:
+  - {id: zone1, name: Hotspot, A: [ch1]}
+scanLists: []

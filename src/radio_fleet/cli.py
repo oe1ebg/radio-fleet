@@ -7,14 +7,15 @@ import os
 import sys
 from pathlib import Path
 
-from radio_fleet import __version__, fleet, snapshot, sources
+from radio_fleet import __version__, build, fleet, snapshot, sources
 from radio_fleet.config import ConfigError
+from radio_fleet.dmrconf import Dmrconf, DmrconfCli
 from radio_fleet.mcp import Fetcher, FetchError, McpCli
 from radio_fleet.model import Channel, Ctcss, Dcs, Tone
 from radio_fleet.selection import Selection, mhz, select
 
 
-def main(argv: list[str] | None = None, fetcher: Fetcher | None = None) -> int:
+def main(argv: list[str] | None = None, fetcher: Fetcher | None = None, dmrconf: Dmrconf | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="fleet", description="Build CPS files for every radio from one channel source."
     )
@@ -27,6 +28,9 @@ def main(argv: list[str] | None = None, fetcher: Fetcher | None = None) -> int:
     )
     common.add_argument("--fleet", type=Path, help="fleet file (default: DATA/fleet.yaml)")
     common.add_argument("--snapshots", type=Path, help="snapshot directory (default: DATA/snapshots)")
+    with_sources = argparse.ArgumentParser(add_help=False)
+    with_sources.add_argument("--radio", required=True, help="radio id in the fleet file")
+    with_sources.add_argument("--sources", type=Path, help="own lists, overrides, templates (default: DATA/sources)")
     commands = parser.add_subparsers(dest="command")
 
     fetch = commands.add_parser(
@@ -41,11 +45,14 @@ def main(argv: list[str] | None = None, fetcher: Fetcher | None = None) -> int:
     )
     fetch.add_argument("--offline", action="store_true", help="read the existing snapshots instead of the network")
 
-    select_command = commands.add_parser(
-        "select", parents=[common], help="print the channels, zones and drops of one radio"
+    commands.add_parser(
+        "select", parents=[common, with_sources], help="print the channels, zones and drops of one radio"
     )
-    select_command.add_argument("--radio", required=True, help="radio id in the fleet file")
-    select_command.add_argument("--sources", type=Path, help="own lists, overrides, templates (default: DATA/sources)")
+    commands.add_parser(
+        "build",
+        parents=[common, with_sources],
+        help="render one radio's file to build/<radio>/ and check it with the radio's tool",
+    )
 
     args = parser.parse_args(argv)
     if args.command is None:
@@ -58,9 +65,17 @@ def main(argv: list[str] | None = None, fetcher: Fetcher | None = None) -> int:
         if args.command == "fetch":
             names = args.sources or list(fleet.load(fleet_file, data_root).sources)
             return _fetch(names, snapshots_dir, args.offline, fetcher or McpCli())
-        return _select(
-            fleet.load(fleet_file, data_root), args.sources or data_root / "sources", snapshots_dir, args.radio
-        )
+        the_fleet = fleet.load(fleet_file, data_root)
+        selection, own = _selection(the_fleet, args.sources or data_root / "sources", snapshots_dir, args.radio)
+        if args.command == "select":
+            _print(selection)
+            return 0
+        output = build.build(selection, own, data_root / "build", dmrconf or DmrconfCli())
+        print(f"{args.radio}: {output}")
+        return 0
+    except build.BuildError as error:
+        print(f"fleet build: {args.radio}: {error}", file=sys.stderr)
+        return 1
     except (ConfigError, snapshot.SnapshotError) as error:
         print(f"fleet {args.command}: {error}", file=sys.stderr)
         return 1
@@ -95,7 +110,9 @@ def _fetch(names: list[str], snapshots_dir: Path, offline: bool, fetcher: Fetche
     return 1 if failed else 0
 
 
-def _select(the_fleet: fleet.Fleet, sources_dir: Path, snapshots_dir: Path, radio_id: str) -> int:
+def _selection(
+    the_fleet: fleet.Fleet, sources_dir: Path, snapshots_dir: Path, radio_id: str
+) -> tuple[Selection, sources.Sources]:
     own = sources.load(sources_dir)
     the_fleet.check_references(own)
     radio = the_fleet.radios.get(radio_id)
@@ -105,11 +122,9 @@ def _select(the_fleet: fleet.Fleet, sources_dir: Path, snapshots_dir: Path, radi
     for source in the_fleet.sources:
         path = snapshot.path_for(snapshots_dir, source)
         if not path.exists():
-            print(f"fleet select: no snapshot for {source!r} at {path}; run `fleet fetch`", file=sys.stderr)
-            return 1
+            raise snapshot.SnapshotError(f"no snapshot for {source!r} at {path}; run `fleet fetch`")
         upstream.extend(snapshot.read(path))
-    _print(select(radio, upstream, own))
-    return 0
+    return select(radio, upstream, own), own
 
 
 def _print(selection: Selection) -> None:

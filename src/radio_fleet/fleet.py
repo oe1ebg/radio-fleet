@@ -94,6 +94,7 @@ class Radio:
     model: str
     renderer: Renderer
     base: Path | None
+    dmrconf_radio: str | None
     capability: Capability
     region: Region
     own_lists: tuple[str, ...]
@@ -137,18 +138,21 @@ def load(path: Path, data_root: Path) -> Fleet:
 def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
     fields = node.fields(
         ["model", "renderer", "capability", "region"],
-        ["base", "own_lists", "dmr_template", "zones", "power", "naming"],
+        ["base", "dmrconf_radio", "own_lists", "dmr_template", "zones", "power", "naming"],
     )
     capability = _capability(fields["capability"])
     try:
         renderer = Renderer(fields["renderer"].text())
     except ValueError:
         raise fields["renderer"].error(f"renderer must be one of {', '.join(Renderer)}") from None
+    if renderer is not Renderer.QDMR and "dmrconf_radio" in fields:
+        raise fields["dmrconf_radio"].error("only the qdmr renderer takes a dmrconf radio")
     return Radio(
         id=radio_id,
         model=fields["model"].text(),
         renderer=renderer,
         base=data_root / fields["base"].text() if "base" in fields else None,
+        dmrconf_radio=fields["dmrconf_radio"].text() if "dmrconf_radio" in fields else None,
         capability=capability,
         region=_region(fields["region"]),
         own_lists=fields["own_lists"].texts() if "own_lists" in fields else (),

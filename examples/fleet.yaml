@@ -10,8 +10,11 @@
 # zones: zone (or bank) rules. A rule's keys mode, band, source, tag and channel (a
 #   name pattern) take one value or a list; a channel joins when it meets every key.
 # base: the renderer's base file, relative to the data root; a base that is named but
-#   missing is an error. Synthetic qdmr bases come with plan step 3. jayt and Hytera base
-#   files never enter a repository; their renderer steps say how they are given.
+#   missing is an error. jayt and Hytera base files never enter a repository; their
+#   renderer steps say how they are given.
+# dmrconf_radio: for the qdmr renderer, the radio key of `dmrconf verify --radio`
+#   (`dmrconf --list-radios`). `fleet build` of a qdmr radio needs a base and a
+#   dmrconf radio.
 
 sources: [oevsv-repeater-db]
 
@@ -19,6 +22,8 @@ radios:
   d878uv2plus:
     model: AnyTone D878UV II Plus
     renderer: qdmr
+    base: bases/qdmr/d878uv2plus.yaml
+    dmrconf_radio: d878uv2
     capability: &anytone
       bands:
         - {name: 2m, rx: [136, 174], tx: [144, 146]}
@@ -43,6 +48,8 @@ radios:
   d168uv:
     model: AnyTone D168UV
     renderer: qdmr
+    base: bases/qdmr/d168uv.yaml
+    dmrconf_radio: d168uv
     capability: *anytone
     region: {locator: JJ00mm, max_km: 50}
     own_lists: [simplex]
