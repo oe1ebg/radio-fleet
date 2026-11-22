@@ -69,7 +69,13 @@ nodes:
       case "$human" in
         "$key" | "$key.pub") echo "the automation key is the owner's signing key" >&2; exit 1 ;;
       esac
-      git config extensions.worktreeConfig true
+      # The only write to the shared .git/config. Runs started together race for
+      # its lock ("could not lock config file"), so write only when it is unset
+      # and retry a lost race.
+      if [ "$(git config --get extensions.worktreeConfig || true)" != true ]; then
+        for _ in 1 2 3 4 5; do git config extensions.worktreeConfig true && break; sleep 1; done
+        test "$(git config --get extensions.worktreeConfig)" = true
+      fi
       git config --worktree user.name "$name"
       git config --worktree user.email "$email"
       git config --worktree gpg.format ssh
