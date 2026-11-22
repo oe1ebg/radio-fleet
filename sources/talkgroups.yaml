@@ -1,0 +1,9 @@
+# Talkgroups (name: number) and RX group lists (name: [talkgroup, ...]), defined once for every
+# radio. Own lists and DMR templates refer to them by name.
+talkgroups:
+  TG9: 9
+  TG91: 91
+  TG99: 99
+  TG232: 232
+rx_group_lists:
+  Austria: [TG232, TG9]

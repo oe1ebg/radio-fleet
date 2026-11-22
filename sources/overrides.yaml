@@ -1,0 +1,9 @@
+# Changes to upstream channels, matched by callsign, of every mode or only of `mode`.
+# Every override needs a reason. `set` takes the channel keys of an own list except
+# mode, time_slot, tx_talkgroup and rx_group_list, for example:
+#
+#   - callsign: OE1XXX
+#     mode: FM
+#     reason: the repeater uses a different CTCSS than the list says
+#     set: {tone_tx: {ctcss: 162.2}}
+overrides: []
