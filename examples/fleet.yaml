@@ -15,8 +15,13 @@
 # dmrconf_radio: for the qdmr renderer, the radio key of `dmrconf verify --radio`
 #   (`dmrconf --list-radios`). `fleet build` of a qdmr radio needs a base and a
 #   dmrconf radio.
+# hytera renderer: `base` is the radio's .rcdx (its secrets come from it), `factory` an
+#   unmodified CPS factory image (the defaults of added records), and the top-level
+#   `hytera_reverse` the tool's checkout. These files stay outside every repository,
+#   so the Hytera profiles below show them as comments with placeholder paths.
 
 sources: [oevsv-repeater-db]
+# hytera_reverse: ../tools/hytera_reverse
 
 radios:
   d878uv2plus:
@@ -151,6 +156,8 @@ radios:
   hp785:
     model: Hytera HP785
     renderer: hytera
+    # base: ../hytera/hp785.rcdx
+    # factory: ../hytera/hp785-factory.rcdx
     capability: &hytera
       bands:
         - {name: 70cm, rx: [400, 470], tx: [430, 440]}
@@ -171,6 +178,8 @@ radios:
   hm785:
     model: Hytera HM785
     renderer: hytera
+    # base: ../hytera/hm785.rcdx
+    # factory: ../hytera/hm785-factory.rcdx
     capability: *hytera
     region: {prefixes: [XX1, XX3]}
     own_lists: [simplex]

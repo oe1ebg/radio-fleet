@@ -95,6 +95,7 @@ class Radio:
     renderer: Renderer
     base: Path | None
     dmrconf_radio: str | None
+    factory: Path | None
     capability: Capability
     region: Region
     own_lists: tuple[str, ...]
@@ -109,9 +110,13 @@ class Fleet:
     file: str
     sources: tuple[str, ...]
     radios: Mapping[str, Radio]
+    hytera_reverse: Path | None
 
     def check_references(self, sources: Sources) -> None:
-        """Every file a profile names must exist: its own lists, its DMR template's file and its base."""
+        """Every file the fleet names must exist: the hytera_reverse checkout, and of each profile its own
+        lists, its DMR template's file, its base and its factory image."""
+        if self.hytera_reverse is not None and not self.hytera_reverse.is_dir():
+            raise ConfigError(f"{self.file}: hytera_reverse: no directory {self.hytera_reverse}")
         for radio in self.radios.values():
             place = f"{self.file}: radios.{radio.id}"
             for name in radio.own_lists:
@@ -121,24 +126,26 @@ class Fleet:
             if radio.dmr_template is not None and radio.dmr_template not in sources.dmr_templates:
                 path = dmr_templates_path(sources.directory)
                 raise ConfigError(f"{place}.dmr_template: no template {radio.dmr_template!r} in {path}")
-            if radio.base is not None and not radio.base.is_file():
-                raise ConfigError(f"{place}.base: no file {radio.base}")
+            for key, file in (("base", radio.base), ("factory", radio.factory)):
+                if file is not None and not file.is_file():
+                    raise ConfigError(f"{place}.{key}: no file {file}")
 
 
 def load(path: Path, data_root: Path) -> Fleet:
-    """Paths in the file, such as bases, are relative to the data root (R13), not to the file."""
-    fields = config.load(path).fields(["sources", "radios"])
+    """Paths in the file, such as bases and tools, are relative to the data root (R13), not to the file."""
+    fields = config.load(path).fields(["sources", "radios"], ["hytera_reverse"])
     sources = fields["sources"].texts()
     if not sources:
         raise fields["sources"].error("name at least one source")
     radios = {radio_id: _radio(radio_id, node, data_root) for radio_id, node in fields["radios"].entries().items()}
-    return Fleet(str(path), sources, radios)
+    hytera_reverse = data_root / fields["hytera_reverse"].text() if "hytera_reverse" in fields else None
+    return Fleet(str(path), sources, radios, hytera_reverse)
 
 
 def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
     fields = node.fields(
         ["model", "renderer", "capability", "region"],
-        ["base", "dmrconf_radio", "own_lists", "dmr_template", "zones", "power", "naming"],
+        ["base", "dmrconf_radio", "factory", "own_lists", "dmr_template", "zones", "power", "naming"],
     )
     capability = _capability(fields["capability"])
     try:
@@ -147,12 +154,15 @@ def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
         raise fields["renderer"].error(f"renderer must be one of {', '.join(Renderer)}") from None
     if renderer is not Renderer.QDMR and "dmrconf_radio" in fields:
         raise fields["dmrconf_radio"].error("only the qdmr renderer takes a dmrconf radio")
+    if renderer is not Renderer.HYTERA and "factory" in fields:
+        raise fields["factory"].error("only the hytera renderer takes a factory image")
     return Radio(
         id=radio_id,
         model=fields["model"].text(),
         renderer=renderer,
         base=data_root / fields["base"].text() if "base" in fields else None,
         dmrconf_radio=fields["dmrconf_radio"].text() if "dmrconf_radio" in fields else None,
+        factory=data_root / fields["factory"].text() if "factory" in fields else None,
         capability=capability,
         region=_region(fields["region"]),
         own_lists=fields["own_lists"].texts() if "own_lists" in fields else (),
