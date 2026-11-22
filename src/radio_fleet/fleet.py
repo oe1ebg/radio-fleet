@@ -212,6 +212,8 @@ def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
         raise fields["dmrconf_radio"].error("only the qdmr renderer takes a dmrconf radio")
     if renderer is not Renderer.HYTERA and "factory" in fields:
         raise fields["factory"].error("only the hytera renderer takes a factory image")
+    if renderer is not Renderer.QDMR and "scan_lists" in fields:
+        raise fields["scan_lists"].error("only the qdmr renderer takes scan lists")
     rules = {
         key: tuple(_group_rule(item, capability, renderer) for item in fields[key].items()) if key in fields else ()
         for key in ("zones", "scan_lists")

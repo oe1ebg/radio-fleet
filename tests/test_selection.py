@@ -192,6 +192,13 @@ def test_a_profile_naming_a_missing_file_is_refused_with_the_file(
             ),
             r"radios\.mono\.zones\S*base_channel: only the qdmr renderer takes base channels",
         ),
+        (
+            (
+                "    zones:\n      - {name: Own, source: synthetic}\n      - {name: XX1",
+                "    scan_lists:\n      - {name: XX1",
+            ),
+            r"radios\.mono\.scan_lists: only the qdmr renderer takes scan lists",
+        ),
     ],
 )
 def test_an_invalid_fleet_file_is_refused_with_its_place(tmp_path: Path, change: tuple[str, str], message: str) -> None:
@@ -227,3 +234,14 @@ def test_locator_centre_and_distance() -> None:
     assert (centre.lat, centre.lon) == pytest.approx((0.5 + 1 / 48, 1 + 1 / 24))
     assert geo.locator_position("JJ00") == Position(0.5, 1.0)
     assert geo.distance_km(Position(0, 0), Position(0, 1)) == pytest.approx(111.19, abs=0.01)
+
+
+def test_base_channels_beyond_the_scan_list_member_limit_leave_no_room_for_generated_channels(
+    tmp_path: Path, synthetic: tuple[fleet.Fleet, sources.Sources]
+) -> None:
+    (tmp_path / "fleet.yaml").write_text(FLEET.replace("scan_list_channels: 3", "scan_list_channels: 1"))
+    dual = select(fleet.load(tmp_path / "fleet.yaml", tmp_path).radios["dual"], UPSTREAM, synthetic[1])
+    mixed = dual.scan_lists[0]
+    assert (mixed.name, mixed.base_channels, mixed.channels) == ("Mixed", ("Hand 1",), ())
+    reason = "not in scan list Mixed: it holds 1 channels at most"
+    assert [d.name for d in dual.drops if d.reason == reason] == ["Hand 2", "S1", "S2", "XX1FM"]

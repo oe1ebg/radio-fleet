@@ -44,7 +44,7 @@ The Hytera command lines run in the data root. A placeholder can be a whole argu
 | `own_lists` | list of strings | no | The own lists, by name, in order. Default: none. |
 | `dmr_template` | string | no | A template of `sources/dmr_templates.yaml`. Default: none. |
 | `zones` | list | no | Zone rules. Default: none. |
-| `scan_lists` | list | no | Scan-list rules. Default: none. |
+| `scan_lists` | list | qdmr | Scan-list rules. Default: none. Only the `qdmr` renderer takes them. |
 | `power` | string | chirp | The power of every channel that sets none. |
 | `naming` | mapping | no | Name replacements. |
 

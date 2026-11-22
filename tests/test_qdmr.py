@@ -145,6 +145,15 @@ def test_an_existing_group_call_contact_with_the_same_number_is_reused() -> None
     assert group_lists["Austria"] == {"id": "gen_grp1", "name": "Austria", "contacts": ["gen_tg232", "cont1"]}
 
 
+def test_a_channel_in_two_scan_lists_refers_to_the_first() -> None:
+    selection, own = example_selection()
+    channels = selection.channels[:2]
+    scan_lists = (Group("One", channels[1:]), Group("Both", channels))
+    rendered = qdmr.load(qdmr.render(Selection(selection.radio, channels, (), scan_lists, (), ()), own, BASE))
+    refs = [inner.get("scanListRef") for item in items(rendered, "channels") for inner in item.values()]
+    assert refs[-2:] == ["gen_scan2", "gen_scan1"]
+
+
 def render_channels(*channels: Channel) -> list[dict[str, Any]]:
     selection, own = example_selection()
     zone = Group("All", channels)

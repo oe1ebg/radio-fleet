@@ -33,6 +33,8 @@ Messages start with `fleet <command>:`. A build error also names the radio: `fle
 | `fleet.yaml: radios.R.dmr_template: no template 'T' in sources/dmr_templates.yaml` | Define the template, or remove it from the profile. |
 | `fleet.yaml: radios.R.dmrconf_radio: only the qdmr renderer takes a dmrconf radio` | Remove `dmrconf_radio`, or change the renderer. |
 | `fleet.yaml: radios.R.factory: only the hytera renderer takes a factory image` | Remove `factory`, or change the renderer. |
+| `fleet.yaml: radios.R.scan_lists: only the qdmr renderer takes scan lists` | Remove `scan_lists`, or change the renderer. |
+| `fleet.yaml: radios.R.zones[N].base_channel: only the qdmr renderer takes base channels` | Remove `base_channel`, or change the renderer. |
 | `fleet.yaml: tools.jayt.commit: expected a git commit: 7 to 40 hex digits` | Give the commit as a quoted string of lowercase hex digits. |
 | `fleet.yaml: tools.hytera.export: expected a list of arguments with exactly the placeholders {base}, {document}` | Each command line must name exactly its files. |
 
