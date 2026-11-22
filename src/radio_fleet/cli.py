@@ -58,6 +58,9 @@ def main(argv: list[str] | None = None, fetcher: Fetcher | None = None) -> int:
     except FileNotFoundError as error:
         print(f"fleet {args.command}: no file {error.filename}", file=sys.stderr)
         return 1
+    except (OSError, UnicodeDecodeError) as error:
+        print(f"fleet {args.command}: {error}", file=sys.stderr)
+        return 1
     parser.print_help()
     return 0
 
@@ -76,6 +79,9 @@ def _fetch(names: list[str], snapshots_dir: Path, offline: bool, fetcher: Fetche
             failed = True
         except (FetchError, snapshot.SnapshotError) as error:
             print(f"fleet fetch: {error}", file=sys.stderr)
+            failed = True
+        except (OSError, UnicodeDecodeError) as error:
+            print(f"fleet fetch: {source!r}: {error}", file=sys.stderr)
             failed = True
         else:
             print(f"{source}: {len(channels)} channels in {path}")
@@ -140,8 +146,10 @@ def _describe(channel: Channel) -> str:
 def _value(value: object, key: str) -> str:
     if isinstance(value, Ctcss | Dcs):
         return _tone(value)
-    if isinstance(value, int) and key.endswith("_hz"):
+    if key in ("rx_hz", "tx_hz") and isinstance(value, int):
         return f"{mhz(value)} MHz"
+    if key == "bandwidth_hz" and isinstance(value, int):
+        return f"{value / 1000:g} kHz"
     if isinstance(value, tuple):
         return ",".join(map(str, value))
     return str(value)

@@ -58,6 +58,31 @@ def test_a_failing_source_does_not_stop_the_others(tmp_path: Path, capsys: pytes
     assert "'synthetic-gone': synthetic outage" in captured.err
 
 
+class UnreadableSources:
+    def fetch_csv(self, source: str) -> str:
+        if source == "synthetic-binary":
+            raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+        if source == "synthetic-denied":
+            raise PermissionError(13, "Permission denied", "synthetic-denied.csv")
+        return mcp_csv([FM_REPEATER])
+
+
+def test_a_source_failing_with_an_os_or_decode_error_does_not_stop_the_others(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fleet = fleet_file(tmp_path, "synthetic-binary", "synthetic-denied", "synthetic-up")
+    assert main(["fetch", "--fleet", fleet, "--snapshots", str(tmp_path)], fetcher=UnreadableSources()) == 1
+    captured = capsys.readouterr()
+    assert captured.out == f"synthetic-up: 1 channels in {tmp_path / 'synthetic-up.csv'}\n"
+    assert "'synthetic-binary': 'utf-8' codec can't decode" in captured.err
+    assert "'synthetic-denied': [Errno 13] Permission denied" in captured.err
+
+
+def test_fetch_without_a_fleet_file_exits_1(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["fetch", "--fleet", str(tmp_path / "none.yaml")], fetcher=NoNetwork()) == 1
+    assert "no file" in capsys.readouterr().err
+
+
 def test_offline_fetch_reads_the_snapshot_without_mcp(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     main(
         ["fetch", "--source", "oevsv-repeater-db", "--snapshots", str(tmp_path)],
@@ -88,6 +113,9 @@ args = sys.argv[1:]
 if args[args.index("--source") + 1] == "broken":
     print("The data source(s) returned an empty dataset!")
     sys.exit(1)
+if args[args.index("--source") + 1] == "binary":
+    open(args[args.index("--output-file") + 1], "wb").write(b"callsign\\n\\xff\\n")
+    sys.exit(0)
 assert args[args.index("--output-format") + 1] == "csv" and "--no-cache" in args
 open(args[args.index("--output-file") + 1], "w").write("callsign\\r\\nXX0FM\\r\\n")
 """
@@ -100,6 +128,8 @@ def test_mcp_cli_runs_mcp_with_csv_output(tmp_path: Path) -> None:
     assert cli.fetch_csv("synthetic-db") == "callsign\nXX0FM\n"
     with pytest.raises(FetchError, match=r"'broken'.*empty dataset"):
         cli.fetch_csv("broken")
+    with pytest.raises(FetchError, match=r"output for source 'binary' is unreadable"):
+        cli.fetch_csv("binary")
 
 
 def test_a_missing_mcp_is_reported_as_a_missing_tool(tmp_path: Path) -> None:
