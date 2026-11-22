@@ -72,6 +72,17 @@ def test_build_writes_the_checked_csv_of_a_chirp_or_ft5d_radio(
     assert ",XX3DD," in output.read_text(encoding="utf-8")
 
 
+def test_a_channel_the_ft5d_output_cannot_carry_is_dropped_and_the_build_passes(
+    data: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["select", "--data", str(data), "--radio", "ft5d"]) == 0
+    assert "  XX1CC: MCP's yaesu-ft5d output carries one CTCSS tone, no DCS\n" in capsys.readouterr().out
+    assert main(["build", "--data", str(data), "--radio", "ft5d"]) == 0, capsys.readouterr().err
+    text = (data / "build" / "ft5d" / "ft5d.csv").read_text(encoding="utf-8")
+    modes = [(row[8], row[10]) for row in (line.split(",") for line in text.splitlines()) if "XX1" in row[10]]
+    assert modes == [("FM", "XX1AA"), ("DN", "XX1CC")]
+
+
 class FakeMcp:
     def __init__(self, output: str = "", error: str | None = None) -> None:
         self.output, self.error = output, error

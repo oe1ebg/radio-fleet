@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 
 from radio_fleet import geo
@@ -63,6 +63,24 @@ def select(radio: Radio, upstream: Sequence[Channel], sources: Sources) -> Selec
         else:
             kept.append(_named(radio, channel))
     return Selection(radio, tuple(kept), _zones(radio, kept, drops), tuple(drops), tuple(applied))
+
+
+def without(selection: Selection, unfit: Callable[[Channel], str | None]) -> Selection:
+    """The selection without the channels a renderer's output cannot carry, each dropped with the reason,
+    and without the zones that are left empty."""
+    reasons = {channel: unfit(channel) for channel in selection.channels}
+    drops = [Drop(channel.name, reason) for channel in selection.channels if (reason := reasons[channel])]
+    if not drops:
+        return selection
+    zones: list[Zone] = []
+    for zone in selection.zones:
+        kept = tuple(channel for channel in zone.channels if not reasons[channel])
+        if kept:
+            zones.append(Zone(zone.name, kept))
+        else:
+            drops.append(Drop(f"zone {zone.name}", "holds no channel the output carries"))
+    channels = tuple(channel for channel in selection.channels if not reasons[channel])
+    return replace(selection, channels=channels, zones=tuple(zones), drops=(*selection.drops, *drops))
 
 
 def _outside(region: Region, channel: Channel) -> str | None:

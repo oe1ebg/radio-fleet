@@ -1,13 +1,15 @@
 import csv
 import io
+import sys
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from radio_fleet import fleet
+from radio_fleet import build, fleet
 from radio_fleet.dmrconf import CheckError
-from radio_fleet.mcp import McpCli
+from radio_fleet.mcp import ConvertError, McpCli
 from radio_fleet.model import Channel, Ctcss, Dcs, Mode
 from radio_fleet.render import ft5d
 from radio_fleet.selection import Selection, Zone
@@ -79,9 +81,9 @@ def test_the_selection_goes_to_mcp_with_one_bank_filter_per_zone() -> None:
 
 
 @pytest.mark.parametrize(
-    ("channel", "message"),
+    ("channel", "reason"),
     [
-        (Channel("XX0DM", 438_962_500, 431_462_500, Mode.DMR), "carries FM and C4FM, not DMR"),
+        (Channel("XX0DM", 438_962_500, 431_462_500, Mode.DMR), "the FT5D carries FM and C4FM, not DMR"),
         (Channel("Hill, Big", 145_500_000, 145_500_000, Mode.FM), "cannot hold , or"),
         (Channel("XX0DC", 438_625_000, 431_025_000, Mode.FM, tone_tx=Dcs(23)), "one CTCSS tone, no DCS"),
         (
@@ -90,15 +92,24 @@ def test_the_selection_goes_to_mcp_with_one_bank_filter_per_zone() -> None:
         ),
     ],
 )
-def test_a_channel_mcp_cannot_write_for_the_ft5d_is_refused(channel: Channel, message: str) -> None:
-    with pytest.raises(ft5d.RenderError, match=message):
+def test_a_channel_mcp_cannot_write_for_the_ft5d_is_dropped_with_the_reason(channel: Channel, reason: str) -> None:
+    selection = build.fit(
+        Selection(RADIO, (SIMPLEX, channel), (Zone("Simplex", (SIMPLEX,)), Zone("Other", (channel,))), (), ())
+    )
+    assert selection.channels == (SIMPLEX,)
+    assert selection.zones == (Zone("Simplex", (SIMPLEX,)),)
+    ((name, dropped), zone) = [(drop.name, drop.reason) for drop in selection.drops]
+    assert name == channel.name and reason in dropped
+    assert zone == ("zone Other", "holds no channel the output carries")
+    with pytest.raises(ft5d.RenderError, match=reason):
         ft5d.render(Selection(RADIO, (channel,), (), (), ()), FakeMcp())
 
 
-def test_more_zones_than_banks_are_refused() -> None:
-    zones = tuple(Zone(f"Z{i}", (SIMPLEX,)) for i in range(ft5d.BANKS + 1))
-    with pytest.raises(ft5d.RenderError, match="25 zones, the FT5D has 24 banks"):
-        ft5d.render(Selection(RADIO, (SIMPLEX,), zones, (), ()), FakeMcp())
+@pytest.mark.parametrize(("channels", "zones"), [(901, 24), (900, 25)])
+def test_a_profile_beyond_the_import_files_memories_or_banks_is_refused(channels: int, zones: int) -> None:
+    radio = replace(RADIO, capability=replace(RADIO.capability, channels=channels, zones=zones))
+    with pytest.raises(ft5d.RenderError, match=f"{channels} channels and {zones} zones, .* 900 memories and 24 banks"):
+        ft5d.render(Selection(radio, (SIMPLEX,), (), (), ()), FakeMcp())
 
 
 def empty_memory(number: int) -> str:
@@ -118,10 +129,22 @@ def test_the_csv_check_refuses_a_file_without_the_memories_of_the_selection(line
         ft5d.check("\n".join(lines) + "\n", Selection(RADIO, (SIMPLEX,), (), (), ()))
 
 
-def test_the_csv_check_refuses_a_bank_column_that_is_not_on_or_off() -> None:
-    text = ft5d.render(Selection(RADIO, (SIMPLEX,), (Zone("Simplex", (SIMPLEX,)),), (), ()), McpCli())
-    first, rest = text.split("\n", 1)
+@pytest.mark.parametrize(("bank", "flag"), [(1, "OFF"), (2, "ON"), (1, "YES")])
+def test_the_csv_check_refuses_a_memory_outside_its_zones_banks(bank: int, flag: str) -> None:
+    selection = Selection(RADIO, (SIMPLEX,), (Zone("Simplex", (SIMPLEX,)),), (), ())
+    first, rest = ft5d.render(selection, McpCli()).split("\n", 1)
     fields = first.split(",")
-    fields[28] = "YES"
-    with pytest.raises(CheckError, match="row 1 has a bank column that is not ON or OFF"):
-        ft5d.check(",".join(fields) + "\n" + rest, Selection(RADIO, (SIMPLEX,), (), (), ()))
+    fields[27 + bank] = flag
+    with pytest.raises(CheckError, match=r"memory 1 is not in banks \[1\]"):
+        ft5d.check(",".join(fields) + "\n" + rest, selection)
+
+
+def test_a_missing_mcp_fails_the_conversion(tmp_path: Path) -> None:
+    with pytest.raises(ConvertError, match="memory-channels-processor is not installed"):
+        McpCli(command=[str(tmp_path / "no-such-mcp")]).convert("name\n", "yaesu-ft5d", [])
+
+
+def test_mcp_exiting_non_zero_fails_the_conversion_with_its_message() -> None:
+    failing = [sys.executable, "-c", "import sys; sys.exit('synthetic failure')"]
+    with pytest.raises(ConvertError, match="failed for output format 'yaesu-ft5d': synthetic failure"):
+        McpCli(command=failing).convert("name\n", "yaesu-ft5d", [])

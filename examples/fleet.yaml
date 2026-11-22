@@ -15,7 +15,11 @@
 # dmrconf_radio: for the qdmr renderer, the radio key of `dmrconf verify --radio`
 #   (`dmrconf --list-radios`). `fleet build` of a qdmr radio needs a base and a
 #   dmrconf radio.
-# power: for the chirp renderer, CHIRP's power in watts, such as 5.0W.
+# power: for the chirp renderer, CHIRP's power in watts, such as 5.0W; a channel's
+#   own power is a level name (Max, High, Mid, Low, Min), for which the chirp
+#   renderer writes the profile's watts.
+# A channel that a renderer's output cannot carry, such as DCS on the ft5d, is
+#   dropped with the reason.
 
 sources: [oevsv-repeater-db]
 
@@ -107,8 +111,7 @@ radios:
       zones: 24
       zone_channels: 100
       name_length: 16
-    # XX1 has a DCS repeater, which MCP's yaesu-ft5d output cannot carry.
-    region: {prefixes: [XX3, XX5]}
+    region: {prefixes: [XX]}
     own_lists: [simplex]
     zones:
       - {name: Simplex, source: simplex}

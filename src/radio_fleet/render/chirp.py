@@ -48,11 +48,21 @@ class RenderError(ValueError):
     pass
 
 
+def unfit(channel: Channel) -> str | None:
+    """Why CHIRP's CSV cannot carry the channel, or None."""
+    if channel.mode is not Mode.FM:
+        return f"CHIRP's radios here carry FM, not {channel.mode}"
+    if _step(channel.rx_hz) is None:
+        return f"RX {_mhz(channel.rx_hz)} MHz is on no CHIRP tuning step"
+    return None
+
+
 def render(selection: Selection) -> str:
     out = io.StringIO()
     writer = csv.writer(out, lineterminator="\n")
     writer.writerow(COLUMNS)
-    writer.writerows(_row(location, channel) for location, channel in enumerate(selection.channels, 1))
+    radio_power = selection.radio.power
+    writer.writerows(_row(location, channel, radio_power) for location, channel in enumerate(selection.channels, 1))
     return out.getvalue()
 
 
@@ -75,12 +85,11 @@ def check(text: str, selection: Selection) -> None:
             raise CheckError(f"CSV check failed: line {number}: name {row[1]!r} exceeds {limit} characters")
 
 
-def _row(location: int, channel: Channel) -> list[str]:
-    if channel.mode is not Mode.FM:
-        raise RenderError(f"channel {channel.name}: CHIRP's radios here carry FM, not {channel.mode}")
-    power = channel.power or ""
-    if power and not _POWER.fullmatch(power):
-        raise RenderError(f"channel {channel.name}: power {power!r} is not CHIRP's watts, such as 5.0W")
+def _row(location: int, channel: Channel, radio_power: str | None) -> list[str]:
+    reason = unfit(channel)
+    step = _step(channel.rx_hz)
+    if reason is not None or step is None:
+        raise RenderError(f"channel {channel.name}: {reason}")
     shift = channel.tx_hz - channel.rx_hz
     tone, r_tone, c_tone, dtcs, rx_dtcs, cross = _tones(channel.tone_tx, channel.tone_rx)
     narrow = channel.bandwidth_hz is not None and channel.bandwidth_hz <= 12_500
@@ -98,9 +107,9 @@ def _row(location: int, channel: Channel) -> list[str]:
         rx_dtcs,
         cross,
         "NFM" if narrow else "FM",
-        _step(channel),
+        f"{step / 1000:.2f}",
         "",
-        power,
+        _power(channel, radio_power),
         channel.source,
         "",
         "",
@@ -130,11 +139,16 @@ def _kind(tone: Tone | None) -> str:
     return "" if tone is None else "Tone" if isinstance(tone, Ctcss) else "DTCS"
 
 
-def _step(channel: Channel) -> str:
-    step = next((step for step in _STEPS if channel.rx_hz % step == 0), None)
-    if step is None:
-        raise RenderError(f"channel {channel.name}: RX {_mhz(channel.rx_hz)} MHz is on no CHIRP tuning step")
-    return f"{step / 1000:.2f}"
+def _step(hz: int) -> int | None:
+    return next((step for step in _STEPS if hz % step == 0), None)
+
+
+def _power(channel: Channel, radio_power: str | None) -> str:
+    """A channel's power in CHIRP's watts; a level name, such as a qdmr radio's `Low`, gives the profile's watts."""
+    for power in (channel.power, radio_power):
+        if power is None or _POWER.fullmatch(power):
+            return power or ""
+    raise RenderError(f"the profile's power {radio_power!r} is not CHIRP's watts, such as 5.0W")
 
 
 def _mhz(hz: int) -> str:

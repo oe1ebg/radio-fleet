@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from radio_fleet import fleet, sources
+from radio_fleet import build, fleet, sources
 from radio_fleet.dmrconf import CheckError
 from radio_fleet.model import Channel, Ctcss, Dcs, Mode
 from radio_fleet.render import chirp
-from radio_fleet.selection import Selection, select
+from radio_fleet.selection import Drop, Selection, Zone, select
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 RADIO = fleet.load(EXAMPLES / "fleet.yaml", EXAMPLES).radios["uv5r-mini"]
@@ -72,17 +72,39 @@ def test_the_memory_limit_drops_channels_with_a_reason() -> None:
     assert ("70cm Call", "channel limit of 1 reached") in [(drop.name, drop.reason) for drop in selection.drops]
 
 
+def test_a_channel_chirp_cannot_carry_is_dropped_with_the_reason() -> None:
+    simplex = Channel("2m Call", 145_500_000, 145_500_000, Mode.FM)
+    off_step = Channel("XX0OS", 145_600_100, 145_000_100, Mode.FM)
+    digital = Channel("XX0DM", 438_962_500, 431_462_500, Mode.DMR)
+    channels = (simplex, off_step, digital)
+    selection = build.fit(Selection(RADIO, channels, (Zone("All", channels),), (), ()))
+    assert selection.channels == (simplex,)
+    assert selection.zones == (Zone("All", (simplex,)),)
+    assert selection.drops == (
+        Drop("XX0OS", "RX 145.600100 MHz is on no CHIRP tuning step"),
+        Drop("XX0DM", "CHIRP's radios here carry FM, not DMR"),
+    )
+    with pytest.raises(chirp.RenderError, match=r"XX0OS: RX 145\.600100 MHz is on no CHIRP tuning step"):
+        chirp.render(Selection(RADIO, (off_step,), (), (), ()))
+
+
 @pytest.mark.parametrize(
-    ("channel", "message"),
-    [
-        (Channel("XX0DM", 438_962_500, 431_462_500, Mode.DMR), "carry FM, not DMR"),
-        (Channel("XX0FM", 145_600_000, 145_000_000, Mode.FM, power="High"), "power 'High' is not CHIRP's watts"),
-        (Channel("XX0FM", 145_600_100, 145_000_100, Mode.FM), "is on no CHIRP tuning step"),
-    ],
+    ("channel_power", "radio_power", "written"),
+    [("2.0W", "5.0W", "2.0W"), ("Low", "5.0W", "5.0W"), ("Low", None, ""), (None, None, "")],
 )
-def test_a_channel_chirp_cannot_carry_is_refused(channel: Channel, message: str) -> None:
-    with pytest.raises(chirp.RenderError, match=message):
-        chirp.render(Selection(RADIO, (channel,), (), (), ()))
+def test_a_channel_power_in_watts_is_written_and_a_level_name_gives_the_profiles_watts(
+    channel_power: str | None, radio_power: str | None, written: str
+) -> None:
+    radio = replace(RADIO, power=radio_power)
+    channel = Channel("XX0FM", 145_600_000, 145_000_000, Mode.FM, power=channel_power)
+    (row,) = csv.DictReader(io.StringIO(chirp.render(Selection(radio, (channel,), (), (), ()))))
+    assert row["Power"] == written
+
+
+def test_a_profile_power_that_is_not_watts_is_refused() -> None:
+    channel = Channel("XX0FM", 145_600_000, 145_000_000, Mode.FM, power="High")
+    with pytest.raises(chirp.RenderError, match="the profile's power 'High' is not CHIRP's watts"):
+        chirp.render(Selection(replace(RADIO, power="High"), (channel,), (), (), ()))
 
 
 @pytest.mark.parametrize(

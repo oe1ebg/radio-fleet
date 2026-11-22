@@ -13,13 +13,23 @@ from pathlib import Path
 from radio_fleet.dmrconf import CheckError, Dmrconf
 from radio_fleet.fleet import Renderer
 from radio_fleet.mcp import Converter, ConvertError
+from radio_fleet.model import Channel
 from radio_fleet.render import chirp, ft5d, qdmr
-from radio_fleet.selection import Selection
+from radio_fleet.selection import Selection, without
 from radio_fleet.sources import Sources
 
 
 class BuildError(RuntimeError):
     pass
+
+
+_UNFIT: dict[Renderer, Callable[[Channel], str | None]] = {Renderer.CHIRP: chirp.unfit, Renderer.FT5D: ft5d.unfit}
+
+
+def fit(selection: Selection) -> Selection:
+    """The selection without the channels the radio's output cannot carry, which it drops with the reason (R4)."""
+    unfit = _UNFIT.get(selection.radio.renderer)
+    return selection if unfit is None else without(selection, unfit)
 
 
 def build(selection: Selection, sources: Sources, build_dir: Path, dmrconf: Dmrconf, mcp: Converter) -> Path:
