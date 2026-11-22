@@ -22,11 +22,21 @@
 #   commit it was built from; the jayt renderer needs it. The path here is a placeholder.
 #   A jayt radio's base is its radio file (an FT-3185 image), which never enters a
 #   repository: name a git-ignored or absolute path in the owner's fleet.yaml.
+# tools.hytera: the export and import command lines of the Hytera tool, as argument
+#   lists that run in the data root. {base}, {factory}, {document} and {output} stand
+#   for the files; each command names exactly its own. The commands here are placeholders.
+# hytera renderer: `base` is the radio's .rcdx (its secrets come from it) and `factory`
+#   an unmodified CPS factory image (the defaults of added records). These files stay
+#   outside every repository, so the Hytera profiles below show them as comments with
+#   placeholder paths.
 
 sources: [oevsv-repeater-db]
 
 tools:
   jayt: {path: tools/jayt, commit: '0000000'}
+  hytera:
+    export: [tools/hytera-export, '{base}', '{document}']
+    import: [tools/hytera-import, '{document}', '{output}', '{base}', '{factory}']
 
 radios:
   d878uv2plus:
@@ -161,6 +171,8 @@ radios:
   hp785:
     model: Hytera HP785
     renderer: hytera
+    # base: ../hytera/hp785.rcdx
+    # factory: ../hytera/hp785-factory.rcdx
     capability: &hytera
       bands:
         - {name: 70cm, rx: [400, 470], tx: [430, 440]}
@@ -181,6 +193,8 @@ radios:
   hm785:
     model: Hytera HM785
     renderer: hytera
+    # base: ../hytera/hm785.rcdx
+    # factory: ../hytera/hm785-factory.rcdx
     capability: *hytera
     region: {prefixes: [XX1, XX3]}
     own_lists: [simplex]

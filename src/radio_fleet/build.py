@@ -12,9 +12,10 @@ from pathlib import Path
 
 from radio_fleet.dmrconf import CheckError, Dmrconf
 from radio_fleet.fleet import Renderer
+from radio_fleet.hytera_tool import HyteraTool
 from radio_fleet.jayt import Jayt, JaytError, MissingCommand
 from radio_fleet.mcp import Exporter, McpError
-from radio_fleet.render import chirp, ft5d, qdmr
+from radio_fleet.render import chirp, ft5d, hytera, qdmr
 from radio_fleet.render import jayt as jayt_render
 from radio_fleet.render.csvcheck import CsvCheckError
 from radio_fleet.selection import Selection
@@ -34,6 +35,7 @@ def build(
     dmrconf: Dmrconf,
     mcp: Exporter,
     jayt: Jayt | None = None,
+    hytera_tool: HyteraTool | None = None,
 ) -> Path:
     """Return the path of the checked file."""
     radio = selection.radio
@@ -41,10 +43,9 @@ def build(
         if jayt is None:
             raise BuildError("the jayt renderer needs tools.jayt (path and commit) in the fleet file")
         return _jayt(selection, build_dir / radio.id, jayt)
-    suffix = _SUFFIXES.get(radio.renderer)
-    if suffix is None:
-        raise BuildError(f"the {radio.renderer} renderer is not implemented yet")
-    output = build_dir / radio.id / f"{radio.id}.{suffix}"
+    if radio.renderer is Renderer.HYTERA:
+        return _hytera(selection, sources, build_dir, hytera_tool)
+    output = build_dir / radio.id / f"{radio.id}.{_SUFFIXES[radio.renderer]}"
     output.unlink(missing_ok=True)
     capability = radio.capability
     try:
@@ -117,5 +118,35 @@ def _jayt(selection: Selection, output_dir: Path, jayt: Jayt) -> Path:
             raise BuildError(str(error)) from None
         output_dir.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(edited, document)
+        shutil.copyfile(candidate, output)
+    return output
+
+
+def _hytera(selection: Selection, sources: Sources, build_dir: Path, tool: HyteraTool | None) -> Path:
+    """Export the base, edit the export, and rebuild the file; the rebuild is the check.
+
+    The export and the edited YAML stay in a temporary directory: they are derived from the base file,
+    which never enters a repository (G2), and only the checked `.rcdx` goes to `build/<radio>/`.
+    """
+    radio = selection.radio
+    output = build_dir / radio.id / f"{radio.id}.rcdx"
+    output.unlink(missing_ok=True)
+    if radio.base is None or radio.factory is None:
+        raise BuildError("the hytera renderer needs a base and a factory in the profile")
+    if tool is None:
+        raise BuildError("the hytera renderer needs tools.hytera (export and import commands) in the fleet file")
+    with tempfile.TemporaryDirectory(prefix="fleet-build-") as tmp:
+        exported, edited, candidate = (Path(tmp) / name for name in ("base.yaml", "edited.yaml", output.name))
+        try:
+            tool.export(radio.base, exported)
+            try:
+                text = hytera.render(selection, sources, exported.read_text(encoding="utf-8"))
+            except hytera.RenderError as error:
+                raise BuildError(f"the export of the base: {error}") from None
+            edited.write_text(text, encoding="utf-8")
+            tool.import_(edited, candidate, radio.base, radio.factory)
+        except CheckError as error:
+            raise BuildError(str(error)) from None
+        output.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(candidate, output)
     return output

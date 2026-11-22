@@ -9,7 +9,7 @@ from enum import StrEnum
 from fnmatch import fnmatchcase
 from pathlib import Path
 
-from radio_fleet import config, geo
+from radio_fleet import config, geo, hytera_tool
 from radio_fleet.config import ConfigError, Node
 from radio_fleet.model import Channel, Mode, Position
 from radio_fleet.sources import MHZ, Sources, dmr_templates_path, own_list_path
@@ -96,6 +96,7 @@ class Radio:
     renderer: Renderer
     base: Path | None
     dmrconf_radio: str | None
+    factory: Path | None
     capability: Capability
     region: Region
     own_lists: tuple[str, ...]
@@ -114,14 +115,24 @@ class Tool:
 
 
 @dataclass(frozen=True, slots=True)
+class Commands:
+    """The export and import command lines of a file tool, with `{name}` placeholders for its files."""
+
+    export: tuple[str, ...]
+    import_: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class Fleet:
     file: str
     sources: tuple[str, ...]
     radios: Mapping[str, Radio]
     jayt: Tool | None = None
+    hytera: Commands | None = None
 
     def check_references(self, sources: Sources) -> None:
-        """Every file a profile names must exist: its own lists, its DMR template's file and its base."""
+        """Every file a profile names must exist: its own lists, its DMR template's file, its base and its
+        factory image."""
         for radio in self.radios.values():
             place = f"{self.file}: radios.{radio.id}"
             for name in radio.own_lists:
@@ -131,8 +142,9 @@ class Fleet:
             if radio.dmr_template is not None and radio.dmr_template not in sources.dmr_templates:
                 path = dmr_templates_path(sources.directory)
                 raise ConfigError(f"{place}.dmr_template: no template {radio.dmr_template!r} in {path}")
-            if radio.base is not None and not radio.base.is_file():
-                raise ConfigError(f"{place}.base: no file {radio.base}")
+            for key, file in (("base", radio.base), ("factory", radio.factory)):
+                if file is not None and not file.is_file():
+                    raise ConfigError(f"{place}.{key}: no file {file}")
 
 
 def load(path: Path, data_root: Path) -> Fleet:
@@ -142,9 +154,10 @@ def load(path: Path, data_root: Path) -> Fleet:
     if not sources:
         raise fields["sources"].error("name at least one source")
     radios = {radio_id: _radio(radio_id, node, data_root) for radio_id, node in fields["radios"].entries().items()}
-    tools = fields["tools"].fields((), ["jayt"]) if "tools" in fields else {}
+    tools = fields["tools"].fields((), ["jayt", "hytera"]) if "tools" in fields else {}
     jayt = _tool(tools["jayt"], data_root) if "jayt" in tools else None
-    return Fleet(str(path), sources, radios, jayt)
+    hytera = _commands(tools["hytera"]) if "hytera" in tools else None
+    return Fleet(str(path), sources, radios, jayt, hytera)
 
 
 _COMMIT = re.compile(r"[0-9a-f]{7,40}")
@@ -159,10 +172,26 @@ def _tool(node: Node, data_root: Path) -> Tool:
     return Tool((data_root / fields["path"].text()).absolute(), commit)
 
 
+def _commands(node: Node) -> Commands:
+    fields = node.fields(hytera_tool.FILES)
+    return Commands(_command(fields["export"], "export"), _command(fields["import"], "import"))
+
+
+def _command(node: Node, command: str) -> tuple[str, ...]:
+    """A list of arguments that names exactly the command's files, each as `{name}`."""
+    files = hytera_tool.FILES[command]
+    argv = node.texts()
+    named = {name for arg in argv for name in hytera_tool.PLACEHOLDER.findall(arg)}
+    if not argv or named != set(files):
+        placeholders = ", ".join(f"{{{name}}}" for name in files)
+        raise node.error(f"expected a list of arguments with exactly the placeholders {placeholders}")
+    return argv
+
+
 def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
     fields = node.fields(
         ["model", "renderer", "capability", "region"],
-        ["base", "dmrconf_radio", "own_lists", "dmr_template", "zones", "power", "naming"],
+        ["base", "dmrconf_radio", "factory", "own_lists", "dmr_template", "zones", "power", "naming"],
     )
     capability = _capability(fields["capability"])
     try:
@@ -171,12 +200,15 @@ def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
         raise fields["renderer"].error(f"renderer must be one of {', '.join(Renderer)}") from None
     if renderer is not Renderer.QDMR and "dmrconf_radio" in fields:
         raise fields["dmrconf_radio"].error("only the qdmr renderer takes a dmrconf radio")
+    if renderer is not Renderer.HYTERA and "factory" in fields:
+        raise fields["factory"].error("only the hytera renderer takes a factory image")
     return Radio(
         id=radio_id,
         model=fields["model"].text(),
         renderer=renderer,
         base=data_root / fields["base"].text() if "base" in fields else None,
         dmrconf_radio=fields["dmrconf_radio"].text() if "dmrconf_radio" in fields else None,
+        factory=data_root / fields["factory"].text() if "factory" in fields else None,
         capability=capability,
         region=_region(fields["region"]),
         own_lists=fields["own_lists"].texts() if "own_lists" in fields else (),

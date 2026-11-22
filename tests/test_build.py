@@ -55,11 +55,6 @@ def test_a_failing_check_fails_the_build_names_the_radio_and_removes_its_output(
     assert not output_of(data, "d168uv").exists()
 
 
-def test_a_radio_without_a_renderer_yet_fails_the_build(data: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["build", "--data", str(data), "--radio", "hp785"], dmrconf=FakeDmrconf()) == 1
-    assert capsys.readouterr().err == "fleet build: hp785: the hytera renderer is not implemented yet\n"
-
-
 def test_a_render_error_fails_the_build_with_the_base_and_channel(
     data: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
