@@ -6,19 +6,47 @@ names of the channel model.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+import dataclasses
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from radio_fleet import config
 from radio_fleet.config import Node
-from radio_fleet.model import Channel, Ctcss, Dcs, Mode, Tone
+from radio_fleet.model import Channel, Ctcss, Dcs, Mode, Power, Tone
 
 MHZ, KHZ = 1_000_000, 1_000
 
-_OVERRIDE_KEYS = ("name", "rx", "tx", "tone_tx", "tone_rx", "bandwidth", "color_code", "power", "tags")
-_CHANNEL_KEYS = (*_OVERRIDE_KEYS, "mode", "time_slot", "tx_talkgroup", "rx_group_list")
+_CHANNEL_KEYS = (
+    "name",
+    "rx",
+    "tx",
+    "mode",
+    "tone_tx",
+    "tone_rx",
+    "bandwidth",
+    "color_code",
+    "time_slot",
+    "tx_talkgroup",
+    "rx_group_list",
+    "power",
+    "tags",
+    "rx_only",
+)
+# The keys an override can clear, and the channel field each one names.
+_CLEARABLE = {
+    "tone_tx": "tone_tx",
+    "tone_rx": "tone_rx",
+    "bandwidth": "bandwidth_hz",
+    "color_code": "color_code",
+    "time_slot": "time_slot",
+    "tx_talkgroup": "tx_talkgroup",
+    "rx_group_list": "rx_group_list",
+    "power": "power",
+    "tags": "tags",
+}
+_DEFAULTS: dict[str, Any] = {field.name: field.default for field in dataclasses.fields(Channel)}
 
 
 class ChannelFields(TypedDict, total=False):
@@ -33,8 +61,9 @@ class ChannelFields(TypedDict, total=False):
     time_slot: int
     tx_talkgroup: str
     rx_group_list: str
-    power: str
+    power: Power
     tags: tuple[str, ...]
+    rx_only: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,21 +74,34 @@ class OwnList:
 
 @dataclass(frozen=True, slots=True)
 class Override:
-    """Changes the upstream channels of one callsign, of every mode or of one."""
+    """Sets and clears fields of the upstream channels of one callsign, optionally only of one mode, of one
+    band (by its name in the radio's capability) and of some radios. `clear` names channel fields."""
 
     callsign: str
     reason: str
     changes: ChannelFields
+    clear: tuple[str, ...] = ()
     mode: Mode | None = None
+    band: str | None = None
+    radios: tuple[str, ...] = ()
+    place: str = ""
 
-    def matches(self, channel: Channel) -> bool:
-        return channel.name == self.callsign and self.mode in (None, channel.mode)
+    def applies_to(self, radio_id: str) -> bool:
+        return not self.radios or radio_id in self.radios
+
+    def matches(self, channel: Channel, band: str | None) -> bool:
+        return (
+            channel.callsign == self.callsign
+            and self.mode in (None, channel.mode)
+            and (self.band is None or self.band == band)
+        )
 
 
 @dataclass(frozen=True, slots=True)
 class AppliedOverride:
     channel: str
     mode: Mode
+    band: str | None
     override: Override
 
 
@@ -93,7 +135,7 @@ def load(sources_dir: Path) -> Sources:
         talkgroups=talkgroups,
         rx_group_lists=rx_group_lists,
         own_lists=_own_lists(sorted((sources_dir / "own").glob("*.yaml")), names),
-        overrides=_overrides(_load(sources_dir / "overrides.yaml")),
+        overrides=_overrides(_load(sources_dir / "overrides.yaml"), names),
         dmr_templates=_dmr_templates(_load(dmr_templates_path(sources_dir)), names),
     )
 
@@ -108,26 +150,32 @@ def dmr_templates_path(sources_dir: Path) -> Path:
 
 
 def apply_overrides(
-    channels: Iterable[Channel], overrides: Sequence[Override]
+    channels: Iterable[Channel], overrides: Sequence[Override], band_of: Callable[[Channel], str | None]
 ) -> tuple[list[Channel], list[AppliedOverride]]:
-    """Apply every matching override in file order; overrides match by the upstream callsign."""
+    """Apply every matching override in file order; overrides match the upstream channel as it was."""
     result: list[Channel] = []
     applied: list[AppliedOverride] = []
     for channel in channels:
         changed = channel
+        band = band_of(channel)
         for override in overrides:
-            if override.matches(channel):
-                changed = replace(changed, **override.changes)
-                applied.append(AppliedOverride(channel.name, channel.mode, override))
+            if override.matches(channel, band):
+                cleared = {field: _DEFAULTS[field] for field in override.clear}
+                changed = replace(changed, **override.changes, **cleared)
+                applied.append(AppliedOverride(override.callsign, channel.mode, band, override))
         result.append(changed)
     return result, applied
 
 
-def expand_dmr(channels: Iterable[Channel], template: Sequence[TemplateChannel]) -> list[Channel]:
-    """Replace each DMR channel by one channel per template entry; other modes pass unchanged."""
+def expand_dmr(
+    channels: Iterable[Channel], template_of: Callable[[Channel], Sequence[TemplateChannel] | None]
+) -> list[Channel]:
+    """Replace each DMR channel by one channel per entry of its template. A channel without a template, a
+    channel that has a talkgroup already (from an override) and the channels of other modes pass unchanged."""
     result: list[Channel] = []
     for channel in channels:
-        if channel.mode is not Mode.DMR:
+        template = template_of(channel) if channel.mode is Mode.DMR and channel.tx_talkgroup is None else None
+        if template is None:
             result.append(channel)
             continue
         result.extend(
@@ -198,7 +246,10 @@ def _own_lists(paths: Iterable[Path], names: _Names) -> dict[str, OwnList]:
 
 
 def _own_channel(node: Node, list_name: str, list_tags: tuple[str, ...], names: _Names) -> Channel:
-    values = _channel_fields(node.fields(["name", "rx", "mode"], _CHANNEL_KEYS), names)
+    fields = node.fields(["name", "rx", "mode"], _CHANNEL_KEYS)
+    values = _channel_fields(fields, names)
+    if values.get("rx_only") and "tx" in fields:
+        raise fields["tx"].error("a receive-only channel has no TX frequency")
     channel = Channel(
         name=values["name"], rx_hz=values["rx_hz"], tx_hz=values["rx_hz"], mode=values["mode"], source=list_name
     )
@@ -206,21 +257,36 @@ def _own_channel(node: Node, list_name: str, list_tags: tuple[str, ...], names: 
     return replace(channel, **values)
 
 
-def _overrides(root: Node) -> tuple[Override, ...]:
-    return tuple(_override(node) for node in root.fields((), ["overrides"]).get("overrides", _EMPTY).items())
+def _overrides(root: Node, names: _Names) -> tuple[Override, ...]:
+    overrides = root.fields((), ["overrides"]).get("overrides", _EMPTY).items()
+    return tuple(_override(node, names) for node in overrides)
 
 
-def _override(node: Node) -> Override:
-    fields = node.fields(["callsign", "reason", "set"], ["mode"])
-    changes = fields["set"].fields((), _OVERRIDE_KEYS)
-    if not changes:
-        raise fields["set"].error("an override changes at least one field")
+def _override(node: Node, names: _Names) -> Override:
+    fields = node.fields(["callsign", "reason"], ["mode", "band", "radios", "set", "clear"])
+    changes = fields["set"].fields((), _CHANNEL_KEYS) if "set" in fields else {}
+    clear = _one_or_more(fields["clear"]) if "clear" in fields else ()
+    if not changes and not clear:
+        raise node.error("an override sets or clears at least one field")
+    for key in clear:
+        if key not in _CLEARABLE:
+            raise fields["clear"].error(f"cannot clear {key!r}; clear takes {', '.join(_CLEARABLE)}")
+        if key in changes:
+            raise fields["clear"].error(f"{key!r} is both set and cleared")
     return Override(
         callsign=fields["callsign"].text(),
         reason=fields["reason"].text(),
-        changes=_channel_fields(changes, _Names({}, {})),
+        changes=_channel_fields(changes, names),
+        clear=tuple(_CLEARABLE[key] for key in clear),
         mode=_mode(fields["mode"]) if "mode" in fields else None,
+        band=fields["band"].text() if "band" in fields else None,
+        radios=_one_or_more(fields["radios"]) if "radios" in fields else (),
+        place=f"{node.file}: {node.path}",
     )
+
+
+def _one_or_more(node: Node) -> tuple[str, ...]:
+    return (node.text(),) if isinstance(node.value, str) else node.texts()
 
 
 def _dmr_templates(root: Node, names: _Names) -> dict[str, tuple[TemplateChannel, ...]]:
@@ -265,9 +331,13 @@ def _channel_fields(fields: Mapping[str, Node], names: _Names) -> ChannelFields:
             case "rx_group_list":
                 values["rx_group_list"] = names.rx_group_list(node)
             case "power":
-                values["power"] = node.text()
+                values["power"] = _power(node)
             case "tags":
                 values["tags"] = node.texts()
+            case "rx_only":
+                if not isinstance(node.value, bool):
+                    raise node.error("expected true or false")
+                values["rx_only"] = node.value
             case _:
                 raise AssertionError(f"channel key {key!r} has no reader")
     return values
@@ -278,6 +348,15 @@ def _mode(node: Node) -> Mode:
         return Mode(node.text())
     except ValueError:
         raise node.error(f"mode must be one of {', '.join(Mode)}") from None
+
+
+def _power(node: Node) -> Power:
+    try:
+        return Power(node.text())
+    except ValueError:
+        raise node.error(
+            f"power is a level: {', '.join(Power)}; the radio profile maps it to the radio's value"
+        ) from None
 
 
 def _tone(node: Node) -> Tone:

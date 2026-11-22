@@ -55,15 +55,16 @@ def test_a_failing_check_fails_the_build_names_the_radio_and_removes_its_output(
     assert not output_of(data, "d168uv").exists()
 
 
-def test_a_render_error_fails_the_build_with_the_base_and_channel(
+def test_a_power_the_renderer_cannot_take_fails_with_the_profile(
     data: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     fleet_file = data / "fleet.yaml"
-    fleet_file.write_text(fleet_file.read_text().replace("power: High", "power: 5W"))
+    fleet_file.write_text(fleet_file.read_text().replace("power: High\n    naming", "power: 5W\n    naming", 1))
     assert main(["build", "--data", str(data), "--radio", "d878uv2plus"], dmrconf=FakeDmrconf()) == 1
-    err = capsys.readouterr().err
-    assert err.startswith(f"fleet build: d878uv2plus: {data / 'bases' / 'qdmr' / 'd878uv2plus.yaml'}: channel ")
-    assert "power '5W' is not one of Max, High, Mid, Low, Min" in err
+    assert capsys.readouterr().err == (
+        f"fleet build: {fleet_file}: radios.d878uv2plus.power: the qdmr renderer takes the power as "
+        "Max, High, Mid, Low or Min, not '5W'\n"
+    )
 
 
 @pytest.mark.parametrize("key", ["base: bases/qdmr/d878uv2plus.yaml", "dmrconf_radio: d878uv2"])
@@ -95,7 +96,7 @@ def test_dmrconf_verify_passes_the_build_of_a_synthetic_base(
     data: Path, radio: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     assert main(["build", "--data", str(data), "--radio", radio]) == 0, capsys.readouterr().err
-    assert output_of(data, radio).is_file()
+    assert "rxOnly: true" in output_of(data, radio).read_text(encoding="utf-8")
 
 
 @pytest.mark.dmrconf

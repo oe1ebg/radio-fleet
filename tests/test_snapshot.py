@@ -17,13 +17,24 @@ def test_fm_repeater_row_converts() -> None:
             tone_tx=Ctcss(88.5),
             tone_rx=Ctcss(88.5),
             source="synthetic-db",
+            callsign="XX0FM",
+            site="Synthetic Hill",
         ),
     ]
 
 
 def test_dmr_repeater_row_converts() -> None:
     assert list(snapshot.channels_from_rows([DMR_REPEATER])) == [
-        Channel(name="XX0DM", rx_hz=438_962_500, tx_hz=431_462_500, mode=Mode.DMR, color_code=1, source="synthetic-db"),
+        Channel(
+            name="XX0DM",
+            rx_hz=438_962_500,
+            tx_hz=431_462_500,
+            mode=Mode.DMR,
+            color_code=1,
+            source="synthetic-db",
+            callsign="XX0DM",
+            site="Synthetic Tower",
+        ),
     ]
 
 

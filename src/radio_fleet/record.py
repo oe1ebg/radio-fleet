@@ -2,7 +2,7 @@
 data root's `applied.yaml`.
 
 A channel is recorded as its name and the fields the radio holds, each as text, so that two builds compare
-by name and field whatever renderer wrote the file.
+by name and field whatever renderer wrote the file. The power is the radio's value of the channel's level.
 """
 
 from __future__ import annotations
@@ -17,9 +17,10 @@ import yaml
 
 from radio_fleet import config
 from radio_fleet.config import Node
+from radio_fleet.fleet import Radio
 from radio_fleet.model import Channel, Ctcss, Dcs, Tone
 from radio_fleet.selection import Drop, Selection, mhz
-from radio_fleet.sources import AppliedOverride
+from radio_fleet.sources import AppliedOverride, Override
 
 RECORD = "selection.yaml"
 
@@ -28,18 +29,19 @@ def _text(value: object) -> str | None:
     return None if value is None else str(value)
 
 
-_FIELDS: dict[str, Callable[[Channel], str | None]] = {
-    "rx": lambda channel: mhz(channel.rx_hz),
-    "tx": lambda channel: mhz(channel.tx_hz),
-    "mode": lambda channel: str(channel.mode),
-    "tone_tx": lambda channel: None if channel.tone_tx is None else tone(channel.tone_tx),
-    "tone_rx": lambda channel: None if channel.tone_rx is None else tone(channel.tone_rx),
-    "bandwidth": lambda channel: None if channel.bandwidth_hz is None else f"{channel.bandwidth_hz / 1000:g} kHz",
-    "color_code": lambda channel: _text(channel.color_code),
-    "time_slot": lambda channel: _text(channel.time_slot),
-    "tx_talkgroup": lambda channel: _text(channel.tx_talkgroup),
-    "rx_group_list": lambda channel: _text(channel.rx_group_list),
-    "power": lambda channel: _text(channel.power),
+_FIELDS: dict[str, Callable[[Channel, Radio], str | None]] = {
+    "rx": lambda channel, _: mhz(channel.rx_hz),
+    "tx": lambda channel, _: mhz(channel.tx_hz),
+    "mode": lambda channel, _: str(channel.mode),
+    "tone_tx": lambda channel, _: None if channel.tone_tx is None else tone(channel.tone_tx),
+    "tone_rx": lambda channel, _: None if channel.tone_rx is None else tone(channel.tone_rx),
+    "bandwidth": lambda channel, _: None if channel.bandwidth_hz is None else f"{channel.bandwidth_hz / 1000:g} kHz",
+    "color_code": lambda channel, _: _text(channel.color_code),
+    "time_slot": lambda channel, _: _text(channel.time_slot),
+    "tx_talkgroup": lambda channel, _: _text(channel.tx_talkgroup),
+    "rx_group_list": lambda channel, _: _text(channel.rx_group_list),
+    "power": lambda channel, radio: radio.power_value(channel.power),
+    "rx_only": lambda channel, _: "yes" if channel.rx_only else None,
 }
 FIELDS = tuple(_FIELDS)
 """The fields of a channel record besides its name, in the order they are written and compared."""
@@ -53,6 +55,7 @@ class BuildRecord:
     channels: tuple[ChannelRecord, ...]
     drops: tuple[Drop, ...]
     overrides: tuple[str, ...]
+    unmatched_overrides: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,8 +65,8 @@ class Applied:
     channels: tuple[ChannelRecord, ...]
 
 
-def channel_record(channel: Channel) -> dict[str, str]:
-    values = {field: text(channel) for field, text in _FIELDS.items()}
+def channel_record(channel: Channel, radio: Radio) -> dict[str, str]:
+    values = {field: text(channel, radio) for field, text in _FIELDS.items()}
     return {"name": channel.name} | {field: value for field, value in values.items() if value is not None}
 
 
@@ -72,9 +75,21 @@ def tone(tone: Tone) -> str:
 
 
 def override_text(applied: AppliedOverride) -> str:
-    override = applied.override
-    changes = ", ".join(f"{key}={_value(value, key)}" for key, value in override.changes.items())
-    return f"{applied.channel} {applied.mode}: {changes} ({override.reason})"
+    """An applied override: the channel it changed, by callsign, mode and band, and its changes."""
+    target = " ".join(part for part in (applied.channel, applied.mode, applied.band) if part)
+    return f"{target}: {_changes(applied.override)}"
+
+
+def unmatched_text(override: Override) -> str:
+    """An override that matches nothing: what it matches, by callsign and the mode and band it names."""
+    target = " ".join(part for part in (override.callsign, override.mode, override.band) if part)
+    return f"{target}: {_changes(override)}"
+
+
+def _changes(override: Override) -> str:
+    changes = [f"{key}={_value(value, key)}" for key, value in override.changes.items()]
+    changes += [f"{field}=-" for field in override.clear]
+    return f"{', '.join(changes)} ({override.reason})"
 
 
 def _value(value: object, key: str) -> str:
@@ -91,9 +106,10 @@ def _value(value: object, key: str) -> str:
 
 def write_build(selection: Selection, directory: Path) -> None:
     document = {
-        "channels": [channel_record(channel) for channel in selection.channels],
+        "channels": [channel_record(channel, selection.radio) for channel in selection.channels],
         "drops": [{"name": drop.name, "reason": drop.reason} for drop in selection.drops],
         "overrides": [override_text(applied) for applied in selection.overrides],
+        "unmatched_overrides": [unmatched_text(override) for override in selection.unmatched_overrides],
     }
     directory.mkdir(parents=True, exist_ok=True)
     (directory / RECORD).write_text(_dump(document), encoding="utf-8")
@@ -104,12 +120,13 @@ def read_build(directory: Path) -> BuildRecord | None:
     path = directory / RECORD
     if not path.is_file():
         return None
-    fields = config.load(path).fields(["channels", "drops", "overrides"])
+    fields = config.load(path).fields(["channels", "drops", "overrides"], ["unmatched_overrides"])
     drops = []
     for item in fields["drops"].items():
         drop = item.fields(["name", "reason"])
         drops.append(Drop(drop["name"].text(), drop["reason"].text()))
-    return BuildRecord(_channels(fields["channels"]), tuple(drops), fields["overrides"].texts())
+    unmatched = fields["unmatched_overrides"].texts() if "unmatched_overrides" in fields else ()
+    return BuildRecord(_channels(fields["channels"]), tuple(drops), fields["overrides"].texts(), unmatched)
 
 
 def load_applied(path: Path) -> dict[str, Applied]:

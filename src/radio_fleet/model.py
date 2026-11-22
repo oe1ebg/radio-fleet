@@ -13,6 +13,16 @@ class Mode(StrEnum):
     DSTAR = "D-STAR"
 
 
+class Power(StrEnum):
+    """A channel's power level; each radio profile maps the levels to the radio's own values."""
+
+    MAX = "Max"
+    HIGH = "High"
+    MID = "Mid"
+    LOW = "Low"
+    MIN = "Min"
+
+
 @dataclass(frozen=True, slots=True)
 class Ctcss:
     hz: float
@@ -34,7 +44,9 @@ class Position:
 
 @dataclass(frozen=True, slots=True)
 class Channel:
-    """One memory channel. `tx_hz` and `tone_tx` are what the radio transmits."""
+    """One memory channel. `tx_hz` and `tone_tx` are what the radio transmits; a receive-only channel
+    (`rx_only`) never transmits. `callsign` and `site` (the upstream list's name of the repeater) are set
+    on upstream channels only."""
 
     name: str
     rx_hz: int
@@ -47,7 +59,10 @@ class Channel:
     time_slot: int | None = None
     tx_talkgroup: str | None = None
     rx_group_list: str | None = None
-    power: str | None = None
+    power: Power | None = None
     tags: tuple[str, ...] = ()
     source: str = ""
     position: Position | None = None
+    rx_only: bool = False
+    callsign: str | None = None
+    site: str | None = None

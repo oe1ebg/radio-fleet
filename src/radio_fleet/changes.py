@@ -68,6 +68,7 @@ def _section(radio: Radio, build: BuildRecord | None, applied: Applied | None) -
     lines += _list("Changed", changed)
     lines += _list("Drops", [f"{drop.name}: {drop.reason}" for drop in build.drops])
     lines += _list("Overrides", list(build.overrides))
+    lines += _list("Overrides that match nothing", list(build.unmatched_overrides))
     return "\n".join([*lines, ""])
 
 

@@ -166,7 +166,7 @@ def test_build_writes_the_checked_ft5d_csv(tmp_path: Path, capsys: pytest.Captur
     output = data / "build" / "ft5d" / "ft5d.csv"
     assert capsys.readouterr().out == f"ft5d: {output}\n"
     names = [row[10] for row in csv.reader(io.StringIO(output.read_text(encoding="utf-8"))) if row[2]]
-    assert names == ["2m Call", "70cm Call", "C4FM Call", "XX3DD", "XX5FF"]
+    assert names == ["2m Call", "70cm Call", "C4FM Call", "XX1AA", "XX3DD", "XX5FF"]
 
 
 def test_a_channel_with_dcs_fails_the_ft5d_build_and_names_the_radio(
@@ -175,7 +175,9 @@ def test_a_channel_with_dcs_fails_the_ft5d_build_and_names_the_radio(
     data = tmp_path / "data"
     shutil.copytree(EXAMPLES, data)
     fleet_file = data / "fleet.yaml"
-    fleet_file.write_text(fleet_file.read_text().replace("{prefixes: [XX3, XX5]}", "{prefixes: [XX]}"))
+    fleet_file.write_text(
+        fleet_file.read_text().replace('      exclude: {XX1CC: "DCS, which MCP\'s FT5D output cannot carry"}\n', "")
+    )
     assert main(["build", "--data", str(data), "--radio", "ft5d"]) == 1
     assert capsys.readouterr().err == (
         "fleet build: ft5d: channel XX1CC: memory-channels-processor's FT5D output carries no DCS\n"

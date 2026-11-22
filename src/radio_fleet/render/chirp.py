@@ -3,15 +3,15 @@
 Memories are numbered from 1 in the order of the selection. CHIRP reads the power in watts and the tone
 settings as its memory fields: `Tone` is the tone mode, `rToneFreq` the CTCSS tone sent with `Tone`,
 `cToneFreq` the CTCSS tone of `TSQL`, and `Cross` combines a TX and an RX tone as `CrossMode` names.
+A receive-only channel has the `Duplex` `off`, with which CHIRP's radios do not transmit.
 """
 
 from __future__ import annotations
 
 import csv
 import io
-import re
 
-from radio_fleet.fleet import Capability
+from radio_fleet.fleet import WATTS, Capability, Radio
 from radio_fleet.model import Channel, Ctcss, Dcs, Mode, Tone
 from radio_fleet.render.csvcheck import CsvCheckError, check_memories, check_rows, mhz, rows
 from radio_fleet.selection import Selection
@@ -41,7 +41,6 @@ COLUMNS = (
 )
 # The CHIRP tuning steps a frequency and its offset are tried on, coarsest first.
 STEPS_HZ = (12_500, 6_250, 5_000, 2_500)
-_WATTS = re.compile(r"(\d+(?:\.\d+)?)\s*W")
 _DEFAULT_CTCSS = Ctcss(88.5)
 _DEFAULT_DCS = Dcs(23)
 
@@ -55,7 +54,7 @@ def render(selection: Selection) -> str:
     writer = csv.writer(out, lineterminator="\n")
     writer.writerow(COLUMNS)
     for number, channel in enumerate(dict.fromkeys(selection.channels), 1):
-        writer.writerow(_row(number, channel))
+        writer.writerow(_row(selection.radio, number, channel))
     return out.getvalue()
 
 
@@ -67,11 +66,11 @@ def check(text: str, capability: Capability) -> None:
     check_memories([row[1] for row in table[1:]], capability)
 
 
-def _row(number: int, channel: Channel) -> list[str]:
+def _row(radio: Radio, number: int, channel: Channel) -> list[str]:
     if channel.mode is not Mode.FM:
         raise RenderError(f"channel {channel.name}: the CHIRP renderer carries FM, not {channel.mode}")
     offset = channel.tx_hz - channel.rx_hz
-    duplex = "" if offset == 0 else "+" if offset > 0 else "-"
+    duplex = "off" if channel.rx_only else "" if offset == 0 else "+" if offset > 0 else "-"
     narrow = channel.bandwidth_hz is not None and channel.bandwidth_hz <= 12_500
     return [
         str(number),
@@ -83,7 +82,7 @@ def _row(number: int, channel: Channel) -> list[str]:
         "NFM" if narrow else "FM",
         _step(channel, abs(offset)),
         "",
-        _power(channel),
+        _power(radio, channel),
         channel.source,
         "",
         "",
@@ -129,8 +128,12 @@ def _step(channel: Channel, offset: int) -> str:
     raise RenderError(f"channel {channel.name}: RX {mhz(channel.rx_hz)} MHz is on no CHIRP tuning step")
 
 
-def _power(channel: Channel) -> str:
-    match = _WATTS.fullmatch(channel.power or "")
+def _power(radio: Radio, channel: Channel) -> str:
+    """The profile's watts; `fleet.yaml` refuses any other value of a CHIRP radio."""
+    match = WATTS.fullmatch(radio.power_value(channel.power) or "")
     if match is None:
-        raise RenderError(f"channel {channel.name}: CHIRP needs the power in watts, such as 5W, not {channel.power!r}")
+        raise RenderError(
+            f"channel {channel.name}: CHIRP needs a power: give the profile a power level and its watts, "
+            "such as power: High and power_levels: {High: 5W}"
+        )
     return f"{float(match.group(1)):.1f}W"

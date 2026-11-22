@@ -20,7 +20,6 @@ from radio_fleet.selection import Group, Selection
 from radio_fleet.sources import Sources
 
 PREFIX = "gen_"
-POWERS = ("Max", "High", "Mid", "Low", "Min")
 _LISTS = ("contacts", "groupLists", "channels", "zones", "scanLists")
 
 
@@ -164,12 +163,13 @@ class _Generator:
             "rxFrequency": _mhz(channel.rx_hz),
             "txFrequency": _mhz(channel.tx_hz),
         }
+        if channel.rx_only:
+            fields["rxOnly"] = True
         if scan_list_id is not None:
             fields["scanListRef"] = scan_list_id
-        if channel.power is not None:
-            if channel.power not in POWERS:
-                raise RenderError(f"channel {channel.name}: power {channel.power!r} is not one of {', '.join(POWERS)}")
-            fields["power"] = channel.power
+        power = self._selection.radio.power_value(channel.power)
+        if power is not None:
+            fields["power"] = power
         if channel.mode is Mode.FM:
             narrow = channel.bandwidth_hz is not None and channel.bandwidth_hz <= 12_500
             fields["bandwidth"] = "Narrow" if narrow else "Wide"
