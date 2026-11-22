@@ -78,7 +78,7 @@ def main(
             return 0
         if jayt is None and the_fleet.jayt is not None:
             jayt = JaytCli(the_fleet.jayt.path, the_fleet.jayt.commit)
-        output = build.build(selection, own, data_root / "build", dmrconf or DmrconfCli(), jayt)
+        output = build.build(selection, own, data_root / "build", dmrconf or DmrconfCli(), McpCli(), jayt)
         print(f"{args.radio}: {output}")
         return 0
     except build.BuildError as error:

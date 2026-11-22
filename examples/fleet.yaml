@@ -15,6 +15,9 @@
 # dmrconf_radio: for the qdmr renderer, the radio key of `dmrconf verify --radio`
 #   (`dmrconf --list-radios`). `fleet build` of a qdmr radio needs a base and a
 #   dmrconf radio.
+# power: the chirp renderer needs watts (5W); qdmr takes Max, High, Mid, Low or Min.
+# ft5d: zones become the ADMS banks 1 to 24, in order. MCP's FT5D output carries no
+#   DCS, so a DCS channel fails the build; this example region leaves out XX1CC.
 # tools.jayt: the jayt executable (relative to the data root, or absolute) and the
 #   commit it was built from; the jayt renderer needs it. The path here is a placeholder.
 #   A jayt radio's base is its radio file (an FT-3185 image), which never enters a
@@ -77,7 +80,7 @@ radios:
       name_length: 12
     region: {locator: JJ00mm, max_km: 40}
     own_lists: [simplex]
-    power: High
+    power: 5W
 
   uv9r-pro:
     model: Baofeng UV-9R Pro
@@ -85,7 +88,7 @@ radios:
     capability: *baofeng
     region: {locator: JJ00mm, max_km: 40}
     own_lists: [simplex]
-    power: High
+    power: 5W
 
   rt95:
     model: Retevis RT95
@@ -99,7 +102,7 @@ radios:
       name_length: 6
     region: {prefixes: [XX1, XX3]}
     own_lists: [simplex]
-    power: High
+    power: 25W
 
   ft5d:
     model: Yaesu FT5D
@@ -113,7 +116,7 @@ radios:
       zones: 24
       zone_channels: 100
       name_length: 16
-    region: {prefixes: [XX]}
+    region: {prefixes: [XX3, XX5]}
     own_lists: [simplex]
     zones:
       - {name: Simplex, source: simplex}
