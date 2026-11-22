@@ -25,9 +25,26 @@ nodes:
       uv --version >&2
       just --version >&2
       git remote get-url origin >&2
+      refuse() { printf '%s\n' "$1" > "$ARTIFACTS_DIR/refused.txt"; echo '{"ok": false}'; exit 0; }
       if ! grep -qE "^\| $INPUTS_STEP \|" docs/PLAN.md; then
-        echo '{"ok": false}'
-        exit 0
+        refuse "step $INPUTS_STEP is not in docs/PLAN.md"
+      fi
+      # One run per step: refuse when another fleet-step run of this step is
+      # active or paused (it may also come back by itself after a usage limit).
+      runs=$(archon workflow runs --json)
+      others=$(printf '%s' "$runs" | python3 -c '
+      import json, sys
+      step, me = sys.argv[1], sys.argv[2]
+      data = json.load(sys.stdin)
+      runs = data if isinstance(data, list) else data.get("runs", [])
+      for r in runs:
+          inputs = (r.get("metadata") or {}).get("inputs") or {}
+          if (r.get("workflow_name") == "fleet-step" and str(inputs.get("step")) == step
+                  and r.get("status") in ("pending", "running", "paused") and r.get("id") != me):
+              print(r["id"][:8], r["status"])
+      ' "$INPUTS_STEP" "${WORKFLOW_ID:-}")
+      if [ -n "$others" ]; then
+        refuse "step $INPUTS_STEP already has a fleet-step run: $(echo $others). Finish, cancel or abandon it first."
       fi
       just ci >&2
       echo '{"ok": true}'
@@ -41,7 +58,7 @@ nodes:
     depends_on: [preflight]
     when: "$preflight.output.ok == false"
     bash: |
-      echo "step $INPUTS_STEP is not in docs/PLAN.md" >&2
+      cat "$ARTIFACTS_DIR/refused.txt" >&2
       exit 1
 
   # Commits of this run are signed by the automation identity (ebirn-machine), not
