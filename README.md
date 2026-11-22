@@ -8,6 +8,6 @@ The radios are AnyTone (qdmr), Baofeng/Retevis (CHIRP), Yaesu (ADMS, jayt) and H
 - Order of work: [`docs/PLAN.md`](docs/PLAN.md)
 - Rules: [`AGENTS.md`](AGENTS.md)
 
-Status: bootstrap. Nothing is built yet.
+Status: `fleet fetch` snapshots the upstream sources to `snapshots/` (`--offline` reads the existing snapshots). No radio is built yet.
 
 Private repository. Upstream repeater data: ÖVSV, CC BY 4.0.

@@ -1,0 +1,55 @@
+from pathlib import Path
+
+import pytest
+
+from conftest import DMR_REPEATER, FM_REPEATER, mcp_csv, mcp_row
+from radio_fleet import snapshot
+from radio_fleet.model import Channel, Ctcss, Dcs, Mode
+
+
+def test_fm_repeater_row_converts():
+    assert list(snapshot.channels_from_rows([FM_REPEATER])) == [
+        Channel(name="XX0FM", rx_hz=145_600_000, tx_hz=145_000_000, mode=Mode.FM,
+                tone_tx=Ctcss(88.5), tone_rx=Ctcss(88.5), source="synthetic-db"),
+    ]
+
+
+def test_dmr_repeater_row_converts():
+    assert list(snapshot.channels_from_rows([DMR_REPEATER])) == [
+        Channel(name="XX0DM", rx_hz=438_962_500, tx_hz=431_462_500, mode=Mode.DMR, color_code=1, source="synthetic-db"),
+    ]
+
+
+def test_multimode_row_gives_one_channel_per_mode_and_tones_only_on_fm():
+    row = mcp_row(callsign="XX0MM", freq_tx="439.0", freq_rx="431.4", ctcss_tx="77.0", dtcs_rx="23",
+                  bandwidth="12.5", fm="True", dmr="True", c4fm="True", dstar="True", dmr_cc="3")
+    channels = list(snapshot.channels_from_rows([row]))
+    assert [c.mode for c in channels] == [Mode.FM, Mode.DMR, Mode.C4FM, Mode.DSTAR]
+    fm, dmr = channels[0], channels[1]
+    assert (fm.tone_tx, fm.tone_rx, fm.color_code, fm.bandwidth_hz) == (Ctcss(77.0), Dcs(23), None, 12_500)
+    assert (dmr.tone_tx, dmr.tone_rx, dmr.color_code) == (None, None, 3)
+
+
+def test_two_fetches_of_the_same_data_give_identical_snapshots(tmp_path: Path):
+    other = mcp_row(callsign="XX0FM", band="70cm", freq_tx="430.0", freq_rx="437.6", fm="True")
+    first = snapshot.write(tmp_path / "a", "synthetic-db", mcp_csv([DMR_REPEATER, other, FM_REPEATER])).read_bytes()
+    second = snapshot.write(tmp_path / "b", "synthetic-db", mcp_csv([FM_REPEATER, DMR_REPEATER, other])).read_bytes()
+    assert first == second
+    lines = first.decode().split("\n")
+    assert lines[0] == ",".join(snapshot.COLUMNS)
+    assert [line.split(",")[:4] for line in lines[1:4]] == [
+        ["XX0DM", "Synthetic Tower", "70cm", "431.4625"],
+        ["XX0FM", "Synthetic Hill", "2m", "145.0"],
+        ["XX0FM", "", "70cm", "430.0"],
+    ]
+    assert "\r" not in first.decode()
+
+
+def test_snapshot_reads_back_into_channels(tmp_path: Path):
+    path = snapshot.write(tmp_path, "synthetic-db", mcp_csv([FM_REPEATER, DMR_REPEATER]))
+    assert [(c.name, c.mode) for c in snapshot.read(path)] == [("XX0DM", Mode.DMR), ("XX0FM", Mode.FM)]
+
+
+def test_mcp_output_without_a_snapshot_column_is_refused():
+    with pytest.raises(snapshot.SnapshotError, match="callsign"):
+        snapshot.normalize("name,freq_tx\r\nX,145.0\r\n")
