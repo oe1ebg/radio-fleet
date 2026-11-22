@@ -23,7 +23,7 @@ nodes:
       uv --version
       just --version
       git remote get-url origin
-      grep -qE "^\| $INPUTS.step \|" docs/PLAN.md || { echo "step $INPUTS.step is not in docs/PLAN.md" >&2; exit 1; }
+      grep -qE "^\| $INPUTS_STEP \|" docs/PLAN.md || { echo "step $INPUTS_STEP is not in docs/PLAN.md" >&2; exit 1; }
       just ci
 
   - id: deliver
