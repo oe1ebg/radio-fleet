@@ -107,8 +107,11 @@ nodes:
         - Never talk to a radio, never open a serial or USB port (G1).
         - Tests are offline and use synthetic data only; never add real codeplugs,
           radio images, Hytera files or secrets to the repository (G2).
-        - External tools (dmrconf, jayt, hytera_reverse) go through an adapter with
+        - External tools (dmrconf, jayt, the Hytera tool) go through an adapter with
           a fake for the tests; do not copy their code.
+        - The repository is public: never name the owner's private repositories
+          (jayt is the exception) and never write a local path, in code, commits
+          or the PR. A private tool is named by its role ("the Hytera tool").
         - Do not change SPEC.md or docs/PLAN.md. If the step cannot be done as
           specified, stop and report why.
         - Checks: `just ci` must pass (ruff check, ruff format --check, mypy
