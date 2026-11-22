@@ -335,16 +335,24 @@ def test_a_failing_import_check_fails_the_build_names_the_radio_and_removes_its_
 def test_a_hytera_radio_without_base_factory_or_tool_fails_the_build(
     data: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    stale = data / "build" / "hm785" / "hm785.rcdx"
+    stale.parent.mkdir(parents=True)
+    stale.write_bytes(b"earlier build")
     assert main(["build", "--data", str(data), "--radio", "hm785"], hytera=FakeHytera()) == 1
     assert (
         capsys.readouterr().err == "fleet build: hm785: the hytera renderer needs a base and a factory in the profile\n"
     )
+    assert not stale.exists()
     fleet_file = data / "fleet.yaml"
     fleet_file.write_text(re.sub(r"  hytera:\n(    .*\n)+", "", fleet_file.read_text()))
+    stale = data / "build" / "hp785" / "hp785.rcdx"
+    stale.parent.mkdir(parents=True)
+    stale.write_bytes(b"earlier build")
     assert main(["build", "--data", str(data), "--radio", "hp785"]) == 1
     assert capsys.readouterr().err == (
         "fleet build: hp785: the hytera renderer needs tools.hytera (export and import commands) in the fleet file\n"
     )
+    assert not stale.exists()
 
 
 def test_a_missing_factory_is_refused_with_its_path(data: Path) -> None:

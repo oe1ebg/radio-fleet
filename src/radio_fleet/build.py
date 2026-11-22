@@ -129,12 +129,12 @@ def _hytera(selection: Selection, sources: Sources, build_dir: Path, tool: Hyter
     which never enters a repository (G2), and only the checked `.rcdx` goes to `build/<radio>/`.
     """
     radio = selection.radio
+    output = build_dir / radio.id / f"{radio.id}.rcdx"
+    output.unlink(missing_ok=True)
     if radio.base is None or radio.factory is None:
         raise BuildError("the hytera renderer needs a base and a factory in the profile")
     if tool is None:
         raise BuildError("the hytera renderer needs tools.hytera (export and import commands) in the fleet file")
-    output = build_dir / radio.id / f"{radio.id}.rcdx"
-    output.unlink(missing_ok=True)
     with tempfile.TemporaryDirectory(prefix="fleet-build-") as tmp:
         exported, edited, candidate = (Path(tmp) / name for name in ("base.yaml", "edited.yaml", output.name))
         try:

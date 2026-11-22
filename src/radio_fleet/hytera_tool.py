@@ -7,7 +7,8 @@ lines and nothing else. The commands run in the data root, so their relative pat
 The export writes a lossless YAML document of the base file. The import rebuilds the file from the edited
 document with the secrets of the base and the defaults of the factory image; it is also the check: it
 decodes its result again and fails, naming the field, when a value differs. Both convert files only and
-never open a device (G1).
+never open a device (G1). A failing command's output is shown to the user as it is, so the tool must name
+a field without printing its value: no secret of the base may reach the terminal (R9).
 """
 
 from __future__ import annotations
