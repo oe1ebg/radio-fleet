@@ -10,7 +10,7 @@ from pathlib import Path
 from radio_fleet import __version__, build, fleet, snapshot, sources
 from radio_fleet.config import ConfigError
 from radio_fleet.dmrconf import Dmrconf, DmrconfCli
-from radio_fleet.hytera_reverse import HyteraReverseCli, HyteraTool
+from radio_fleet.hytera_tool import HyteraCli, HyteraTool
 from radio_fleet.jayt import Jayt, JaytCli
 from radio_fleet.mcp import Fetcher, FetchError, McpCli
 from radio_fleet.model import Channel, Ctcss, Dcs, Tone
@@ -80,8 +80,8 @@ def main(
             return 0
         if jayt is None and the_fleet.jayt is not None:
             jayt = JaytCli(the_fleet.jayt.path, the_fleet.jayt.commit)
-        if hytera is None and the_fleet.hytera_reverse is not None:
-            hytera = HyteraReverseCli(the_fleet.hytera_reverse)
+        if hytera is None and the_fleet.hytera is not None:
+            hytera = HyteraCli(the_fleet.hytera.export, the_fleet.hytera.import_, data_root)
         output = build.build(selection, own, data_root / "build", dmrconf or DmrconfCli(), McpCli(), jayt, hytera)
         print(f"{args.radio}: {output}")
         return 0

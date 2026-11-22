@@ -1,4 +1,4 @@
-"""Hytera renderer (R9): edits the lossless YAML export of a radio's base `.rcdx` (hytera_reverse).
+"""Hytera renderer (R9): edits the lossless YAML export of a radio's base `.rcdx` (the Hytera tool's).
 
 The renderer edits the digital and analog channels, contacts, RX group lists and zones and leaves every
 other value of the export as it is. Each build starts from a fresh export of the base, so nothing of an

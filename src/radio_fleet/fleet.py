@@ -9,7 +9,7 @@ from enum import StrEnum
 from fnmatch import fnmatchcase
 from pathlib import Path
 
-from radio_fleet import config, geo
+from radio_fleet import config, geo, hytera_tool
 from radio_fleet.config import ConfigError, Node
 from radio_fleet.model import Channel, Mode, Position
 from radio_fleet.sources import MHZ, Sources, dmr_templates_path, own_list_path
@@ -115,18 +115,24 @@ class Tool:
 
 
 @dataclass(frozen=True, slots=True)
+class Commands:
+    """The export and import command lines of a file tool, with `{name}` placeholders for its files."""
+
+    export: tuple[str, ...]
+    import_: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class Fleet:
     file: str
     sources: tuple[str, ...]
     radios: Mapping[str, Radio]
     jayt: Tool | None = None
-    hytera_reverse: Path | None = None
+    hytera: Commands | None = None
 
     def check_references(self, sources: Sources) -> None:
-        """Every file the fleet names must exist: the hytera_reverse checkout, and of each profile its own
-        lists, its DMR template's file, its base and its factory image."""
-        if self.hytera_reverse is not None and not self.hytera_reverse.is_dir():
-            raise ConfigError(f"{self.file}: hytera_reverse: no directory {self.hytera_reverse}")
+        """Every file a profile names must exist: its own lists, its DMR template's file, its base and its
+        factory image."""
         for radio in self.radios.values():
             place = f"{self.file}: radios.{radio.id}"
             for name in radio.own_lists:
@@ -143,15 +149,15 @@ class Fleet:
 
 def load(path: Path, data_root: Path) -> Fleet:
     """Paths in the file, such as bases, are relative to the data root (R13), not to the file."""
-    fields = config.load(path).fields(["sources", "radios"], ["tools", "hytera_reverse"])
+    fields = config.load(path).fields(["sources", "radios"], ["tools"])
     sources = fields["sources"].texts()
     if not sources:
         raise fields["sources"].error("name at least one source")
     radios = {radio_id: _radio(radio_id, node, data_root) for radio_id, node in fields["radios"].entries().items()}
-    tools = fields["tools"].fields((), ["jayt"]) if "tools" in fields else {}
+    tools = fields["tools"].fields((), ["jayt", "hytera"]) if "tools" in fields else {}
     jayt = _tool(tools["jayt"], data_root) if "jayt" in tools else None
-    hytera_reverse = data_root / fields["hytera_reverse"].text() if "hytera_reverse" in fields else None
-    return Fleet(str(path), sources, radios, jayt, hytera_reverse)
+    hytera = _commands(tools["hytera"]) if "hytera" in tools else None
+    return Fleet(str(path), sources, radios, jayt, hytera)
 
 
 _COMMIT = re.compile(r"[0-9a-f]{7,40}")
@@ -164,6 +170,22 @@ def _tool(node: Node, data_root: Path) -> Tool:
         raise fields["commit"].error("expected a git commit: 7 to 40 hex digits")
     # Absolute, so that a bare name such as `jayt` is the file in the data root and not a PATH lookup.
     return Tool((data_root / fields["path"].text()).absolute(), commit)
+
+
+def _commands(node: Node) -> Commands:
+    fields = node.fields(hytera_tool.FILES)
+    return Commands(_command(fields["export"], "export"), _command(fields["import"], "import"))
+
+
+def _command(node: Node, command: str) -> tuple[str, ...]:
+    """A list of arguments that names exactly the command's files, each as `{name}`."""
+    files = hytera_tool.FILES[command]
+    argv = node.texts()
+    named = {name for arg in argv for name in hytera_tool.PLACEHOLDER.findall(arg)}
+    if not argv or named != set(files):
+        placeholders = ", ".join(f"{{{name}}}" for name in files)
+        raise node.error(f"expected a list of arguments with exactly the placeholders {placeholders}")
+    return argv
 
 
 def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:

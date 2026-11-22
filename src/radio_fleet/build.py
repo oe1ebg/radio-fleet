@@ -12,7 +12,7 @@ from pathlib import Path
 
 from radio_fleet.dmrconf import CheckError, Dmrconf
 from radio_fleet.fleet import Renderer
-from radio_fleet.hytera_reverse import HyteraTool
+from radio_fleet.hytera_tool import HyteraTool
 from radio_fleet.jayt import Jayt, JaytError, MissingCommand
 from radio_fleet.mcp import Exporter, McpError
 from radio_fleet.render import chirp, ft5d, hytera, qdmr
@@ -132,7 +132,7 @@ def _hytera(selection: Selection, sources: Sources, build_dir: Path, tool: Hyter
     if radio.base is None or radio.factory is None:
         raise BuildError("the hytera renderer needs a base and a factory in the profile")
     if tool is None:
-        raise BuildError("the hytera renderer needs the hytera_reverse path in the fleet file")
+        raise BuildError("the hytera renderer needs tools.hytera (export and import commands) in the fleet file")
     output = build_dir / radio.id / f"{radio.id}.rcdx"
     output.unlink(missing_ok=True)
     with tempfile.TemporaryDirectory(prefix="fleet-build-") as tmp:

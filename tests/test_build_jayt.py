@@ -169,7 +169,7 @@ def test_a_jayt_radio_needs_a_base_and_the_jayt_tool(data: Path, capsys: pytest.
         capsys.readouterr().err == "fleet build: ftx1: the jayt renderer needs a base (the radio file) in the profile\n"
     )
     fleet_file = data / "fleet.yaml"
-    fleet_file.write_text(fleet_file.read_text().replace("tools:\n  jayt: {path: tools/jayt, commit: '0000000'}\n", ""))
+    fleet_file.write_text(fleet_file.read_text().replace("  jayt: {path: tools/jayt, commit: '0000000'}\n", ""))
     assert main(["build", "--data", str(data), "--radio", "ft3185"]) == 1
     assert capsys.readouterr().err == (
         "fleet build: ft3185: the jayt renderer needs tools.jayt (path and commit) in the fleet file\n"

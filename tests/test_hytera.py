@@ -1,5 +1,7 @@
-"""Hytera renderer, build and hytera_reverse adapter (R9, R10), with a fake tool and a synthetic export."""
+"""Hytera renderer, build and Hytera tool adapter (R9, R10), with a fake tool and a synthetic export."""
 
+import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -12,19 +14,19 @@ from radio_fleet import fleet, snapshot, sources
 from radio_fleet.cli import main
 from radio_fleet.config import ConfigError
 from radio_fleet.dmrconf import CheckError
-from radio_fleet.hytera_reverse import HyteraReverseCli
+from radio_fleet.hytera_tool import HyteraCli
 from radio_fleet.model import Channel, Ctcss, Mode
 from radio_fleet.render import hytera
 from radio_fleet.selection import Selection, Zone, select
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
-# A synthetic lossless export in the shape of hytera_reverse's: a digital channel with the name of a
+# A synthetic lossless export in the shape of the Hytera tool's: a digital channel with the name of a
 # generated one, a hand-made analog channel, a group call contact for TG9 to reuse, a private call with a
 # talkgroup's number, an RX group list and a zone named like a generated one. `rebuild` holds a hex row
 # that YAML would read as a number if it were written back unquoted.
 EXPORT = """\
-format: hytera-rcdx-export/4
+format: synthetic-export/1
 source: {file: BASE_PATH, modules: [], sha256: '00'}
 model: {name: HP785}
 radio: {radio_name: XX0SYN}
@@ -324,7 +326,7 @@ def test_a_failing_import_check_fails_the_build_names_the_radio_and_removes_its_
 ) -> None:
     assert main(["build", "--data", str(data), "--radio", "hp785"], hytera=FakeHytera()) == 0
     capsys.readouterr()
-    message = "rcdx_import.py failed:\ntables.zones.entries[1].members[0]: no digital channel named 'X'"
+    message = "the Hytera tool's import failed:\ntables.zones.entries[1].members[0]: no digital channel named 'X'"
     assert main(["build", "--data", str(data), "--radio", "hp785"], hytera=FakeHytera(message)) == 1
     assert capsys.readouterr().err == f"fleet build: hp785: {message}\n"
     assert not output_of(data).exists()
@@ -337,19 +339,16 @@ def test_a_hytera_radio_without_base_factory_or_tool_fails_the_build(
     assert (
         capsys.readouterr().err == "fleet build: hm785: the hytera renderer needs a base and a factory in the profile\n"
     )
+    fleet_file = data / "fleet.yaml"
+    fleet_file.write_text(re.sub(r"  hytera:\n(    .*\n)+", "", fleet_file.read_text()))
     assert main(["build", "--data", str(data), "--radio", "hp785"]) == 1
     assert capsys.readouterr().err == (
-        "fleet build: hp785: the hytera renderer needs the hytera_reverse path in the fleet file\n"
+        "fleet build: hp785: the hytera renderer needs tools.hytera (export and import commands) in the fleet file\n"
     )
 
 
-def test_a_missing_tool_or_factory_is_refused_with_its_path(data: Path) -> None:
+def test_a_missing_factory_is_refused_with_its_path(data: Path) -> None:
     fleet_file = data / "fleet.yaml"
-    fleet_file.write_text(fleet_file.read_text().replace("# hytera_reverse: ", "hytera_reverse: "))
-    assert fleet.load(fleet_file, data).hytera_reverse == data / "../tools/hytera_reverse"
-    with pytest.raises(ConfigError, match=r"hytera_reverse: no directory \S*tools/hytera_reverse"):
-        fleet.load(fleet_file, data).check_references(sources.load(data / "sources"))
-    (data / ".." / "tools" / "hytera_reverse").mkdir(parents=True)
     (data / ".." / "hytera" / "hp785-factory.rcdx").unlink()
     with pytest.raises(ConfigError, match=r"radios\.hp785\.factory: no file \S*hytera/hp785-factory\.rcdx"):
         fleet.load(fleet_file, data).check_references(sources.load(data / "sources"))
@@ -371,35 +370,63 @@ def test_the_example_fleet_names_no_hytera_file() -> None:
     assert all(radio.base is None and radio.factory is None for radio in hytera_radios)
 
 
-def stand_in(tmp_path: Path, script: str) -> HyteraReverseCli:
-    """hytera_reverse at tmp_path/tool: its two scripts record their arguments or run `script`."""
-    for name in ("rcdx_yaml.py", "rcdx_import.py"):
-        path = tmp_path / "tool" / "src" / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        record = tmp_path / f"{name}.argv"
-        path.write_text(f"import sys\nopen({str(record)!r}, 'w').write(repr(sys.argv[1:]))\n{script}\n")
-    return HyteraReverseCli(tmp_path / "tool", (sys.executable,))
+# A stand-in for the Hytera tool: it records its arguments in calls.jsonl of its working directory and runs
+# the Python statement given as its first argument, which writes the export or the rebuilt file, or fails.
+STAND_IN = """\
+import json, pathlib, sys
+pathlib.Path("calls.jsonl").open("a").write(json.dumps(sys.argv[1:]) + "\\n")
+command, *args = sys.argv[1:]
+exec(command)
+"""
+EXPORT_SCRIPT = f"pathlib.Path(args[-1]).write_text({EXPORT!r})"
+IMPORT_SCRIPT = "pathlib.Path(args[1]).write_bytes(b'synthetic rcdx')"
 
 
-def test_the_adapter_calls_the_lossless_export_and_the_import_with_secrets_and_defaults(tmp_path: Path) -> None:
-    tool = stand_in(tmp_path, "")
-    base, factory = tmp_path / "hp785.rcdx", tmp_path / "factory.rcdx"
+def stand_in(root: Path, export: str = EXPORT_SCRIPT, import_: str = IMPORT_SCRIPT) -> tuple[list[str], list[str]]:
+    """Write the stand-in to `root` and return its export and import command lines."""
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "tool.py").write_text(STAND_IN)
+    return (
+        [sys.executable, "tool.py", export, "--in={base}", "{document}"],
+        [sys.executable, "tool.py", import_, "{document}", "{output}", "--secrets={base}", "--defaults={factory}"],
+    )
+
+
+def calls(root: Path) -> list[list[str]]:
+    return [json.loads(line)[1:] for line in (root / "calls.jsonl").read_text().splitlines()]
+
+
+def test_build_runs_the_configured_commands_in_the_data_root(data: Path) -> None:
+    export, import_ = stand_in(data)
+    fleet_file = data / "fleet.yaml"
+    text = re.sub(r"  hytera:\n(    .*\n)+", "", fleet_file.read_text())
+    fleet_file.write_text(
+        text.replace("tools:\n", f"tools:\n  hytera: {json.dumps({'export': export, 'import': import_})}\n")
+    )
+    assert main(["build", "--data", str(data), "--radio", "hp785"]) == 0
+    base = (data / ".." / "hytera" / "hp785.rcdx").absolute()
+    factory = (data / ".." / "hytera" / "hp785-factory.rcdx").absolute()
+    (exported, document), (edited, output, secrets, defaults) = calls(data)
+    assert (exported, Path(document).name) == (f"--in={base}", "base.yaml")
+    assert (Path(edited).name, Path(output).name) == ("edited.yaml", "hp785.rcdx")
+    assert (secrets, defaults) == (f"--secrets={base}", f"--defaults={factory}")
+    assert output_of(data).read_bytes() == b"synthetic rcdx"
+
+
+def test_the_adapter_fills_the_placeholders_with_absolute_paths(tmp_path: Path) -> None:
+    tool = HyteraCli(*stand_in(tmp_path, "", ""), tmp_path)
+    base, factory = Path("relative", "hp785.rcdx"), tmp_path / "factory.rcdx"
     tool.export(base, tmp_path / "base.yaml")
     tool.import_(tmp_path / "edited.yaml", tmp_path / "out.rcdx", base, factory)
-    assert (tmp_path / "rcdx_yaml.py.argv").read_text() == repr(
-        [str(base), "--lossless", "-o", str(tmp_path / "base.yaml")]
-    )
-    assert (tmp_path / "rcdx_import.py.argv").read_text() == repr(
+    assert calls(tmp_path) == [
+        [f"--in={base.absolute()}", str(tmp_path / "base.yaml")],
         [
             str(tmp_path / "edited.yaml"),
-            "-o",
             str(tmp_path / "out.rcdx"),
-            "--secrets-from",
-            str(base),
-            "--defaults-from",
-            str(factory),
-        ]
-    )
+            f"--secrets={base.absolute()}",
+            f"--defaults={factory}",
+        ],
+    ]
 
 
 @pytest.mark.parametrize(
@@ -407,19 +434,37 @@ def test_the_adapter_calls_the_lossless_export_and_the_import_with_secrets_and_d
     [
         (
             "sys.stderr.write('tables.contacts.entries[3].link_a: read-only in this version\\n'); sys.exit(1)",
-            "rcdx_import.py failed:\ntables.contacts.entries[3].link_a: read-only in this version",
+            "the Hytera tool's import failed:\ntables.contacts.entries[3].link_a: read-only in this version",
         ),
-        ("sys.exit(2)", "rcdx_import.py failed:\nexit status 2"),
+        ("sys.exit(2)", "the Hytera tool's import failed:\nexit status 2"),
     ],
 )
 def test_a_failing_tool_raises_its_message(tmp_path: Path, script: str, message: str) -> None:
+    tool = HyteraCli(*stand_in(tmp_path, "", script), tmp_path)
     with pytest.raises(CheckError) as error:
-        stand_in(tmp_path, script).import_(tmp_path / "e.yaml", tmp_path / "o.rcdx", tmp_path / "b", tmp_path / "f")
+        tool.import_(tmp_path / "e.yaml", tmp_path / "o.rcdx", tmp_path / "b", tmp_path / "f")
     assert str(error.value) == message
 
 
-def test_a_missing_runner_says_the_tool_cannot_run(tmp_path: Path) -> None:
-    missing = str(tmp_path / "no-uv")
+def test_a_missing_tool_says_it_cannot_run(tmp_path: Path) -> None:
+    tool = HyteraCli(["no-such-hytera-tool", "{base}", "{document}"], [], tmp_path)
     with pytest.raises(CheckError) as error:
-        HyteraReverseCli(tmp_path, (missing,)).export(tmp_path / "b.rcdx", tmp_path / "b.yaml")
-    assert str(error.value) == f"hytera_reverse cannot run: {missing} not found"
+        tool.export(tmp_path / "b.rcdx", tmp_path / "b.yaml")
+    assert str(error.value) == "the Hytera tool cannot run: no-such-hytera-tool not found"
+
+
+@pytest.mark.parametrize(
+    ("command", "key"),
+    [
+        ("export: [tool, '{base}']", "export"),
+        ("import: [tool, '{document}', '{output}', '{base}', '{factory}', '{secret}']", "import"),
+        ("import: []", "import"),
+    ],
+)
+def test_a_command_line_must_name_exactly_its_files(data: Path, command: str, key: str) -> None:
+    fleet_file = data / "fleet.yaml"
+    text = fleet_file.read_text()
+    old = next(line for line in text.splitlines() if line.startswith(f"    {key}: "))
+    fleet_file.write_text(text.replace(old, f"    {command}"))
+    with pytest.raises(ConfigError, match=rf"tools\.hytera\.{key}: expected a list of arguments with exactly"):
+        fleet.load(fleet_file, data)
