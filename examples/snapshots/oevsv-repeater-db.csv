@@ -1,0 +1,7 @@
+callsign,name,band,freq_tx,freq_rx,ctcss_tx,ctcss_rx,dtcs_tx,dtcs_rx,c4fm,dmr,dmr_id,dmr_cc,dstar,dstar_rpt1,dstar_rpt2,fm,bandwidth,landmark,state,country,country_code,loc_exact,lat,long,locator,sea_level,comment,skip,scan_group,source_id,source_name,source_provider,source_type,source_license,source_url
+XX1AA,Synthetic Hill,2m,145.0,145.6,88.5,88.5,,,False,False,,,False,,,True,12.5,,,,,False,0.52,1.05,JJ00mm,,,False,,oevsv-repeater-db,Synthetic example data,,,none: synthetic,
+XX1BB,Synthetic Tower,70cm,431.4625,438.9625,,,,,False,True,999001,1,False,,,False,,,,,,False,0.55,1.10,JJ00mm,,,False,,oevsv-repeater-db,Synthetic example data,,,none: synthetic,
+XX1CC,Synthetic Ridge,70cm,431.025,438.625,,,23,,True,False,,,False,,,True,,,,,,False,0.60,1.20,JJ00mo,,,False,,oevsv-repeater-db,Synthetic example data,,,none: synthetic,
+XX3DD,Synthetic Valley,2m,145.0625,145.6625,123.0,,,,False,False,,,False,,,True,,,,,,False,0.40,1.30,JJ00nk,,,False,,oevsv-repeater-db,Synthetic example data,,,none: synthetic,
+XX3EE,Synthetic Coast,70cm,445.0,439.0,,,,,False,False,,,False,,,True,,,,,,False,0.50,1.00,JJ00mm,,,False,,oevsv-repeater-db,Synthetic example data,,,none: synthetic,
+XX5FF,Synthetic Far Peak,2m,145.125,145.725,,,,,False,False,,,False,,,True,,,,,,False,2.50,3.00,JJ22aa,,,False,,oevsv-repeater-db,Synthetic example data,,,none: synthetic,

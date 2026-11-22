@@ -165,3 +165,9 @@ def test_a_failed_fetch_exits_1_and_keeps_the_snapshot(
     assert re.search(f"^fleet fetch: .*{message}", captured.err)
     assert captured.out == ""
     assert (tmp_path / "oevsv-repeater-db.csv").read_bytes() == before
+
+
+def test_fetch_reads_the_snapshots_of_the_data_root(capsys: pytest.CaptureFixture[str]) -> None:
+    examples = Path(__file__).resolve().parents[1] / "examples"
+    assert main(["fetch", "--data", str(examples), "--offline"], fetcher=NoNetwork()) == 0
+    assert capsys.readouterr().out.endswith(f"in {examples / 'snapshots' / 'oevsv-repeater-db.csv'}\n")

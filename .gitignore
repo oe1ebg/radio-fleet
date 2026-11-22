@@ -1,5 +1,5 @@
-# build output and caches
-/build/
+# build output of any data root, and caches
+build/
 /.venv/
 __pycache__/
 *.pyc

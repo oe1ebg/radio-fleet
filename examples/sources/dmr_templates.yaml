@@ -1,5 +1,5 @@
 # A profile's `dmr_template` turns each upstream DMR repeater into these channels. The channel
-# name is the callsign followed by the entry's name, for example "OE1XXX TS1 TG232".
+# name is the callsign followed by the entry's name, for example "XX1AA TS1 TG232".
 templates:
   standard:
     - {name: TS1 TG232, time_slot: 1, tx_talkgroup: TG232, rx_group_list: Austria}

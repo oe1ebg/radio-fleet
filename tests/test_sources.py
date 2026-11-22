@@ -148,6 +148,7 @@ def test_every_channel_key_is_read_into_its_field(tmp_path: Path) -> None:
         ({"own/a.yaml": "name: a\nchannels: [{name: X, rx: 145.5, mode: DMR, tx_talkgroup: TG7}]\n"}, "'TG7'"),
         ({"own/a.yaml": "name: a\nchannels: [{name: X, rx: 145.5, mode: AM}]\n"}, "mode must be one of"),
         ({"own/a.yaml": "name: a\nchannels: [{name: X, rx: 145.5, mode: FM, shift: 1}]\n"}, "unknown key 'shift'"),
+        ({"own/a.yaml": "name: b\nchannels: []\n"}, r"own/a\.yaml: name: the list in a\.yaml must be named 'a'"),
         ({"overrides.yaml": "overrides: [{callsign: X, reason: r, set: {mode: DMR}}]\n"}, "unknown key 'mode'"),
         ({"dmr_templates.yaml": "templates: {t: [{name: A, time_slot: 3, tx_talkgroup: TG1}]}\n"}, "from 1 to 2"),
     ],

@@ -2,7 +2,7 @@
 # Every override needs a reason. `set` takes the channel keys of an own list except
 # mode, time_slot, tx_talkgroup and rx_group_list, for example:
 #
-#   - callsign: OE1XXX
+#   - callsign: XX1AA
 #     mode: FM
 #     reason: the repeater uses a different CTCSS than the list says
 #     set: {tone_tx: {ctcss: 162.2}}
