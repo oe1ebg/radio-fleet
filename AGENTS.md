@@ -37,10 +37,10 @@ Python 3.12, uv. Runtime dependencies: memory-channels-processor (git, pinned ta
 
 ## Layout
 
-A data root (R13) has `fleet.yaml`, `sources/`, `snapshots/`, `bases/`, `applied.yaml` and `build/`. Until step 2b moves them, the example data is at the top level.
+A data root (R13) has `fleet.yaml`, `sources/`, `snapshots/`, `bases/`, `applied.yaml` and `build/`. The CLI takes it from `--data`, else `FLEET_DATA`, else the current directory. Tests that read example data use `examples/`.
 
 ```
-examples/                synthetic data root (step 2b): fleet.yaml, sources/, snapshots/, bases/
+examples/                synthetic data root: fleet.yaml, sources/, snapshots/, bases/
 src/radio_fleet/         package; render/ holds one module per output
 tests/                   data-free tests
 .archon/workflows/       the repo's Archon workflow (fleet-step)

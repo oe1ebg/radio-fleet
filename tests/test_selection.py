@@ -39,7 +39,7 @@ radios:
       zones: 2
       zone_channels: 2
       name_length: 10
-    region: {locator: JN88ee, max_km: 50}
+    region: {locator: JJ00mm, max_km: 50}
     own_lists: [synthetic]
     dmr_template: standard
     zones:
@@ -66,7 +66,7 @@ radios:
       - {name: XX1, channel: ["XX1F*", "XX1?Z"]}
 """
 
-NEAR, FAR = Position(48.2, 16.4), Position(47.0, 15.4)
+NEAR, FAR = Position(0.5, 1.0), Position(1.5, 2.0)
 UPSTREAM = [
     Channel("XX1FM", 145_600_000, 145_000_000, Mode.FM, tone_tx=Ctcss(88.5), source="synthetic-db", position=NEAR),
     Channel("XX1DM", 438_962_500, 431_462_500, Mode.DMR, color_code=1, source="synthetic-db", position=NEAR),
@@ -84,7 +84,7 @@ def synthetic(tmp_path: Path) -> tuple[fleet.Fleet, sources.Sources]:
         (tmp_path / "sources" / name).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / "sources" / name).write_text(text)
     (tmp_path / "fleet.yaml").write_text(FLEET)
-    the_fleet, own = fleet.load(tmp_path / "fleet.yaml"), sources.load(tmp_path / "sources")
+    the_fleet, own = fleet.load(tmp_path / "fleet.yaml", tmp_path), sources.load(tmp_path / "sources")
     the_fleet.check_references(own)
     return the_fleet, own
 
@@ -103,9 +103,9 @@ def test_selection_of_a_synthetic_fleet(synthetic: tuple[fleet.Fleet, sources.So
         ("FM", ["S1", "S2"]),
         ("DMR", ["XX1DM 1 TG", "XX1DM TS2"]),
     ]
-    far_km = geo.distance_km(geo.locator_position("JN88ee"), FAR)
+    far_km = geo.distance_km(geo.locator_position("JJ00mm"), FAR)
     assert list(dual.drops) == [
-        Drop("XX2FM", f"{far_km:.0f} km from JN88ee, beyond 50 km"),
+        Drop("XX2FM", f"{far_km:.0f} km from JJ00mm, beyond 50 km"),
         Drop("XX1NP", "no position to place it in the region"),
         Drop("XX1TX", "TX 445.00000 MHz outside the TX bands"),
         Drop("XX1C4", "mode C4FM not supported"),
@@ -139,23 +139,33 @@ def test_selection_of_a_synthetic_fleet(synthetic: tuple[fleet.Fleet, sources.So
 @pytest.mark.parametrize(
     ("change", "message"),
     [
-        (("[synthetic]\n    dmr_template", "[missing]\n    dmr_template"), "radios.dual.own_lists: no own list"),
-        (("dmr_template: standard", "dmr_template: missing"), "radios.dual.dmr_template: no template"),
+        (
+            ("[synthetic]\n    dmr_template", "[missing]\n    dmr_template"),
+            r"radios\.dual\.own_lists: no own list 'missing': no file \S*sources/own/missing\.yaml",
+        ),
+        (
+            ("dmr_template: standard", "dmr_template: missing"),
+            r"radios\.dual\.dmr_template: no template 'missing' in \S*sources/dmr_templates\.yaml",
+        ),
+        (
+            ("renderer: qdmr\n", "renderer: qdmr\n    base: bases/missing.yaml\n"),
+            r"radios\.dual\.base: no file \S*bases/missing\.yaml",
+        ),
     ],
 )
-def test_a_profile_naming_an_unknown_source_is_refused(
+def test_a_profile_naming_a_missing_file_is_refused_with_the_file(
     tmp_path: Path, synthetic: tuple[fleet.Fleet, sources.Sources], change: tuple[str, str], message: str
 ) -> None:
     (tmp_path / "fleet.yaml").write_text(FLEET.replace(*change))
     with pytest.raises(ConfigError, match=message):
-        fleet.load(tmp_path / "fleet.yaml").check_references(synthetic[1])
+        fleet.load(tmp_path / "fleet.yaml", tmp_path).check_references(synthetic[1])
 
 
 @pytest.mark.parametrize(
     ("change", "message"),
     [
-        (("{locator: JN88ee, max_km: 50}", "{locator: ZZ99, max_km: 50}"), "radios.dual.region.locator"),
-        (("{locator: JN88ee, max_km: 50}", "{locator: JN88ee}"), "either {locator, max_km} or {prefixes}"),
+        (("{locator: JJ00mm, max_km: 50}", "{locator: ZZ99, max_km: 50}"), "radios.dual.region.locator"),
+        (("{locator: JJ00mm, max_km: 50}", "{locator: JJ00mm}"), "either {locator, max_km} or {prefixes}"),
         (("band: 70cm", "band: 23cm"), "no band '23cm'"),
         (("renderer: qdmr", "renderer: cps"), "renderer must be one of"),
         (("rx: [400, 480]", "rx: [480, 400]"), r"\[low, high\]"),
@@ -164,11 +174,11 @@ def test_a_profile_naming_an_unknown_source_is_refused(
 def test_an_invalid_fleet_file_is_refused_with_its_place(tmp_path: Path, change: tuple[str, str], message: str) -> None:
     (tmp_path / "fleet.yaml").write_text(FLEET.replace(*change))
     with pytest.raises(ConfigError, match=message):
-        fleet.load(tmp_path / "fleet.yaml")
+        fleet.load(tmp_path / "fleet.yaml", tmp_path)
 
 
 def test_locator_centre_and_distance() -> None:
-    centre = geo.locator_position("JN88ee")
-    assert (centre.lat, centre.lon) == pytest.approx((48.1875, 16.375))
-    assert geo.locator_position("JN88") == Position(48.5, 17.0)
+    centre = geo.locator_position("JJ00mm")
+    assert (centre.lat, centre.lon) == pytest.approx((0.5 + 1 / 48, 1 + 1 / 24))
+    assert geo.locator_position("JJ00") == Position(0.5, 1.0)
     assert geo.distance_km(Position(0, 0), Position(0, 1)) == pytest.approx(111.19, abs=0.01)

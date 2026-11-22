@@ -11,7 +11,7 @@ from pathlib import Path
 from radio_fleet import config, geo
 from radio_fleet.config import ConfigError, Node
 from radio_fleet.model import Channel, Mode, Position
-from radio_fleet.sources import MHZ, Sources
+from radio_fleet.sources import MHZ, Sources, dmr_templates_path, own_list_path
 
 
 class Renderer(StrEnum):
@@ -93,7 +93,7 @@ class Radio:
     id: str
     model: str
     renderer: Renderer
-    base: str | None
+    base: Path | None
     capability: Capability
     region: Region
     own_lists: tuple[str, ...]
@@ -110,25 +110,31 @@ class Fleet:
     radios: Mapping[str, Radio]
 
     def check_references(self, sources: Sources) -> None:
-        """Every own list and DMR template a profile names must exist in `sources/`."""
+        """Every file a profile names must exist: its own lists, its DMR template's file and its base."""
         for radio in self.radios.values():
+            place = f"{self.file}: radios.{radio.id}"
             for name in radio.own_lists:
                 if name not in sources.own_lists:
-                    raise ConfigError(f"{self.file}: radios.{radio.id}.own_lists: no own list {name!r}")
+                    path = own_list_path(sources.directory, name)
+                    raise ConfigError(f"{place}.own_lists: no own list {name!r}: no file {path}")
             if radio.dmr_template is not None and radio.dmr_template not in sources.dmr_templates:
-                raise ConfigError(f"{self.file}: radios.{radio.id}.dmr_template: no template {radio.dmr_template!r}")
+                path = dmr_templates_path(sources.directory)
+                raise ConfigError(f"{place}.dmr_template: no template {radio.dmr_template!r} in {path}")
+            if radio.base is not None and not radio.base.is_file():
+                raise ConfigError(f"{place}.base: no file {radio.base}")
 
 
-def load(path: Path) -> Fleet:
+def load(path: Path, data_root: Path) -> Fleet:
+    """Paths in the file, such as bases, are relative to the data root (R13), not to the file."""
     fields = config.load(path).fields(["sources", "radios"])
     sources = fields["sources"].texts()
     if not sources:
         raise fields["sources"].error("name at least one source")
-    radios = {radio_id: _radio(radio_id, node) for radio_id, node in fields["radios"].entries().items()}
+    radios = {radio_id: _radio(radio_id, node, data_root) for radio_id, node in fields["radios"].entries().items()}
     return Fleet(str(path), sources, radios)
 
 
-def _radio(radio_id: str, node: Node) -> Radio:
+def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
     fields = node.fields(
         ["model", "renderer", "capability", "region"],
         ["base", "own_lists", "dmr_template", "zones", "power", "naming"],
@@ -142,7 +148,7 @@ def _radio(radio_id: str, node: Node) -> Radio:
         id=radio_id,
         model=fields["model"].text(),
         renderer=renderer,
-        base=fields["base"].text() if "base" in fields else None,
+        base=data_root / fields["base"].text() if "base" in fields else None,
         capability=capability,
         region=_region(fields["region"]),
         own_lists=fields["own_lists"].texts() if "own_lists" in fields else (),

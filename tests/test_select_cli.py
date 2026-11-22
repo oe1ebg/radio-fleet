@@ -1,4 +1,5 @@
 import re
+import shutil
 from collections.abc import Callable
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from radio_fleet import fleet, snapshot, sources
 from radio_fleet.cli import main
 
 REPO = Path(__file__).resolve().parents[1]
+EXAMPLES = REPO / "examples"
 
 SPEC_RADIOS = {
     "AnyTone D878UV II Plus",
@@ -39,10 +41,70 @@ radios:
 
 
 def test_the_example_fleet_names_every_radio_of_the_spec_and_loads() -> None:
-    the_fleet = fleet.load(REPO / "fleet.yaml")
-    the_fleet.check_references(sources.load(REPO / "sources"))
+    the_fleet = fleet.load(EXAMPLES / "fleet.yaml", EXAMPLES)
+    the_fleet.check_references(sources.load(EXAMPLES / "sources"))
     assert {radio.model for radio in the_fleet.radios.values()} == SPEC_RADIOS
     assert the_fleet.sources[0] == "oevsv-repeater-db"
+
+
+def output(capsys: pytest.CaptureFixture[str], argv: list[str]) -> str:
+    assert main(argv) == 0, capsys.readouterr().err
+    return capsys.readouterr().out
+
+
+def test_the_data_root_comes_from_data_else_fleet_data_else_the_current_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.delenv("FLEET_DATA", raising=False)
+    monkeypatch.chdir(EXAMPLES)
+    in_root = output(capsys, ["select", "--radio", "d878uv2plus"])
+    assert in_root.startswith("d878uv2plus (AnyTone D878UV II Plus): ")
+    assert "km from JJ00mm, beyond 80 km" in in_root
+
+    monkeypatch.chdir(REPO)
+    assert output(capsys, ["select", "--data", "examples", "--radio", "d878uv2plus"]) == in_root
+    monkeypatch.chdir(tmp_path)
+    assert output(capsys, ["select", "--data", str(EXAMPLES), "--radio", "d878uv2plus"]) == in_root
+
+    monkeypatch.setenv("FLEET_DATA", str(EXAMPLES))
+    assert output(capsys, ["select", "--radio", "d878uv2plus"]) == in_root
+    monkeypatch.setenv("FLEET_DATA", str(tmp_path))
+    assert output(capsys, ["select", "--data", str(EXAMPLES), "--radio", "d878uv2plus"]) == in_root
+
+
+def test_an_own_list_that_is_named_but_missing_fails_with_its_file_name(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    shutil.copytree(EXAMPLES, tmp_path / "data")
+    (tmp_path / "data" / "sources" / "own" / "simplex.yaml").unlink()
+    assert main(["select", "--data", str(tmp_path / "data"), "--radio", "uv5r-mini"]) == 1
+    assert f"no file {tmp_path / 'data' / 'sources' / 'own' / 'simplex.yaml'}" in capsys.readouterr().err
+
+
+def test_options_that_name_one_path_win_over_the_data_root(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    data, elsewhere = tmp_path / "data", tmp_path / "elsewhere"
+    (data / "bases").mkdir(parents=True)
+    (data / "bases" / "synthetic.yaml").write_text("synthetic: base\n")
+    snapshot.write(elsewhere / "snapshots", "synthetic-db", mcp_csv([FM_REPEATER]))
+    (elsewhere / "sources").mkdir()
+    (elsewhere / "fleet.yaml").write_text(
+        FLEET.replace("renderer: chirp\n", "renderer: chirp\n    base: bases/synthetic.yaml\n")
+    )
+    paths = ["--fleet", str(elsewhere / "fleet.yaml"), "--sources", str(elsewhere / "sources")]
+    selected = output(
+        capsys,
+        ["select", "--data", str(data), "--radio", "synthetic", *paths, "--snapshots", str(elsewhere / "snapshots")],
+    )
+    assert selected.startswith("synthetic (Synthetic 2m FM): 1 channels")
+
+    (data / "bases" / "synthetic.yaml").unlink()
+    assert (
+        main(
+            ["select", "--data", str(data), "--radio", "synthetic", *paths, "--snapshots", str(elsewhere / "snapshots")]
+        )
+        == 1
+    )
+    assert f"radios.synthetic.base: no file {data / 'bases' / 'synthetic.yaml'}" in capsys.readouterr().err
 
 
 def test_select_prints_the_channels_drops_and_overrides(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

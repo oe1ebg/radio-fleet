@@ -75,6 +75,7 @@ class TemplateChannel:
 
 @dataclass(frozen=True, slots=True)
 class Sources:
+    directory: Path
     talkgroups: Mapping[str, int]
     rx_group_lists: Mapping[str, tuple[str, ...]]
     own_lists: Mapping[str, OwnList]
@@ -83,16 +84,27 @@ class Sources:
 
 
 def load(sources_dir: Path) -> Sources:
-    """Read `sources/`; a missing file reads as empty."""
+    """Read `sources/`; a missing file reads as empty. A profile that names what is missing is refused
+    by `Fleet.check_references`."""
     talkgroups, rx_group_lists = _talkgroups(_load(sources_dir / "talkgroups.yaml"))
     names = _Names(talkgroups, rx_group_lists)
     return Sources(
+        directory=sources_dir,
         talkgroups=talkgroups,
         rx_group_lists=rx_group_lists,
         own_lists=_own_lists(sorted((sources_dir / "own").glob("*.yaml")), names),
         overrides=_overrides(_load(sources_dir / "overrides.yaml")),
-        dmr_templates=_dmr_templates(_load(sources_dir / "dmr_templates.yaml"), names),
+        dmr_templates=_dmr_templates(_load(dmr_templates_path(sources_dir)), names),
     )
+
+
+def own_list_path(sources_dir: Path, name: str) -> Path:
+    """An own list is the file named after it, so a profile's `own_lists` entry names one file."""
+    return sources_dir / "own" / f"{name}.yaml"
+
+
+def dmr_templates_path(sources_dir: Path) -> Path:
+    return sources_dir / "dmr_templates.yaml"
 
 
 def apply_overrides(
@@ -178,8 +190,8 @@ def _own_lists(paths: Iterable[Path], names: _Names) -> dict[str, OwnList]:
         root = config.load(path)
         fields = root.fields(["name", "channels"], ["tags"])
         name = fields["name"].text()
-        if name in lists:
-            raise root.error(f"own list {name!r} is defined twice")
+        if name != path.stem:
+            raise fields["name"].error(f"the list in {path.name} must be named {path.stem!r}")
         tags = fields["tags"].texts() if "tags" in fields else ()
         lists[name] = OwnList(name, tuple(_own_channel(node, name, tags, names) for node in fields["channels"].items()))
     return lists
