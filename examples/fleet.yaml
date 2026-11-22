@@ -29,8 +29,13 @@
 #   an unmodified CPS factory image (the defaults of added records). These files stay
 #   outside every repository, so the Hytera profiles below show them as comments with
 #   placeholder paths.
+# equipment: the directory `fleet publish` copies a radio's build to, as
+#   <equipment>/<radio>/generated/<date>/; relative to the data root, and it must exist.
+#   `fleet applied <radio>` records the build in applied.yaml in the data root. The
+#   directory here is a placeholder that this repository does not have.
 
 sources: [oevsv-repeater-db]
+equipment: equipment
 
 tools:
   jayt: {path: tools/jayt, commit: '0000000'}

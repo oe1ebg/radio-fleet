@@ -317,7 +317,10 @@ def test_build_exports_edits_and_imports_and_keeps_only_the_checked_file(
     selection, own = example_selection()
     assert tool.edited == hytera.render(selection, own, EXPORT.replace("BASE_PATH", str(base)))
     assert capsys.readouterr().out == f"hp785: {output_of(data)}\n"
-    assert [path.name for path in (data / "build").rglob("*") if path.is_file()] == ["hp785.rcdx"]
+    files = sorted(path for path in (data / "build").rglob("*") if path.is_file())
+    assert [path.name for path in files] == ["CHANGES.md", "hp785.rcdx", "selection.yaml"]
+    for text in (path.read_text(encoding="utf-8") for path in files if path.suffix != ".rcdx"):
+        assert ".rcdx" not in text and "XX0SYN" not in text and "Hand FM" not in text
     assert output_of(data).read_bytes() == b"synthetic rcdx"
 
 

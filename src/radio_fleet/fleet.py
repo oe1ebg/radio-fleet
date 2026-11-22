@@ -129,6 +129,7 @@ class Fleet:
     radios: Mapping[str, Radio]
     jayt: Tool | None = None
     hytera: Commands | None = None
+    equipment: Path | None = None
 
     def check_references(self, sources: Sources) -> None:
         """Every file a profile names must exist: its own lists, its DMR template's file, its base and its
@@ -149,7 +150,7 @@ class Fleet:
 
 def load(path: Path, data_root: Path) -> Fleet:
     """Paths in the file, such as bases, are relative to the data root (R13), not to the file."""
-    fields = config.load(path).fields(["sources", "radios"], ["tools"])
+    fields = config.load(path).fields(["sources", "radios"], ["tools", "equipment"])
     sources = fields["sources"].texts()
     if not sources:
         raise fields["sources"].error("name at least one source")
@@ -157,7 +158,8 @@ def load(path: Path, data_root: Path) -> Fleet:
     tools = fields["tools"].fields((), ["jayt", "hytera"]) if "tools" in fields else {}
     jayt = _tool(tools["jayt"], data_root) if "jayt" in tools else None
     hytera = _commands(tools["hytera"]) if "hytera" in tools else None
-    return Fleet(str(path), sources, radios, jayt, hytera)
+    equipment = data_root / fields["equipment"].text() if "equipment" in fields else None
+    return Fleet(str(path), sources, radios, jayt, hytera, equipment)
 
 
 _COMMIT = re.compile(r"[0-9a-f]{7,40}")
