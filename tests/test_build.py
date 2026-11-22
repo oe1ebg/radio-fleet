@@ -1,4 +1,5 @@
 import shutil
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,7 @@ from radio_fleet import fleet
 from radio_fleet.cli import main
 from radio_fleet.config import ConfigError
 from radio_fleet.dmrconf import CheckError, DmrconfCli
+from radio_fleet.mcp import ConvertError
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
@@ -56,8 +58,46 @@ def test_a_failing_check_fails_the_build_names_the_radio_and_removes_its_output(
 
 
 def test_a_radio_without_a_renderer_yet_fails_the_build(data: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["build", "--data", str(data), "--radio", "uv5r-mini"], dmrconf=FakeDmrconf()) == 1
-    assert capsys.readouterr().err == "fleet build: uv5r-mini: the chirp renderer is not implemented yet\n"
+    assert main(["build", "--data", str(data), "--radio", "ft3185"], dmrconf=FakeDmrconf()) == 1
+    assert capsys.readouterr().err == "fleet build: ft3185: the jayt renderer is not implemented yet\n"
+
+
+@pytest.mark.parametrize("radio", ["uv5r-mini", "uv9r-pro", "rt95", "ft5d"])
+def test_build_writes_the_checked_csv_of_a_chirp_or_ft5d_radio(
+    data: Path, radio: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["build", "--data", str(data), "--radio", radio]) == 0, capsys.readouterr().err
+    output = data / "build" / radio / f"{radio}.csv"
+    assert capsys.readouterr().out == f"{radio}: {output}\n"
+    assert ",XX3DD," in output.read_text(encoding="utf-8")
+
+
+class FakeMcp:
+    def __init__(self, output: str = "", error: str | None = None) -> None:
+        self.output, self.error = output, error
+
+    def convert(self, channels_csv: str, output_format: str, options: Sequence[str]) -> str:
+        if self.error is not None:
+            raise ConvertError(self.error)
+        return self.output
+
+
+@pytest.mark.parametrize(
+    ("mcp", "message"),
+    [
+        (FakeMcp("1,short\n"), "CSV check failed: 1 rows, the FT5D import has 900"),
+        (FakeMcp(error="memory-channels-processor failed for output format 'yaesu-ft5d': boom"), "boom"),
+    ],
+)
+def test_a_failing_mcp_or_csv_check_fails_the_build_and_names_the_radio(
+    data: Path, mcp: FakeMcp, message: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["build", "--data", str(data), "--radio", "ft5d"]) == 0
+    capsys.readouterr()
+    assert main(["build", "--data", str(data), "--radio", "ft5d"], converter=mcp) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("fleet build: ft5d: ") and message in err
+    assert not (data / "build" / "ft5d" / "ft5d.csv").exists()
 
 
 def test_a_render_error_fails_the_build_with_the_base_and_channel(

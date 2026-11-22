@@ -10,12 +10,17 @@ from pathlib import Path
 from radio_fleet import __version__, build, fleet, snapshot, sources
 from radio_fleet.config import ConfigError
 from radio_fleet.dmrconf import Dmrconf, DmrconfCli
-from radio_fleet.mcp import Fetcher, FetchError, McpCli
+from radio_fleet.mcp import Converter, Fetcher, FetchError, McpCli
 from radio_fleet.model import Channel, Ctcss, Dcs, Tone
 from radio_fleet.selection import Selection, mhz, select
 
 
-def main(argv: list[str] | None = None, fetcher: Fetcher | None = None, dmrconf: Dmrconf | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    fetcher: Fetcher | None = None,
+    dmrconf: Dmrconf | None = None,
+    converter: Converter | None = None,
+) -> int:
     parser = argparse.ArgumentParser(
         prog="fleet", description="Build CPS files for every radio from one channel source."
     )
@@ -70,7 +75,7 @@ def main(argv: list[str] | None = None, fetcher: Fetcher | None = None, dmrconf:
         if args.command == "select":
             _print(selection)
             return 0
-        output = build.build(selection, own, data_root / "build", dmrconf or DmrconfCli())
+        output = build.build(selection, own, data_root / "build", dmrconf or DmrconfCli(), converter or McpCli())
         print(f"{args.radio}: {output}")
         return 0
     except build.BuildError as error:
