@@ -2,7 +2,7 @@
 
 Builds the CPS files for all of my radios from one channel source: the ÖVSV repeater database (through [memory-channels-processor](https://gitlab.com/oe3lrt/memory-channels-processor)) plus my own channel lists.
 
-The radios are AnyTone (qdmr), Baofeng/Retevis (CHIRP), Yaesu (ADMS, jayt) and Hytera (hytera_reverse). Each radio has a profile in `fleet.yaml` of the data root.
+The radios are AnyTone (qdmr), Baofeng/Retevis (CHIRP), Yaesu (ADMS, jayt) and Hytera (a private tool). Each radio has a profile in `fleet.yaml` of the data root.
 
 - What it does and must do: [`SPEC.md`](SPEC.md)
 - Order of work: [`docs/PLAN.md`](docs/PLAN.md)

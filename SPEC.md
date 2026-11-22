@@ -12,7 +12,7 @@ One build turns the upstream repeater lists and the owner's own channel lists in
 | Baofeng UV-5R mini, UV-9R Pro, Retevis RT95 | CHIRP CSV | CHIRP (manual import) |
 | Yaesu FT5D | ADMS-14 CSV | ADMS (manual import) |
 | Yaesu FT-3185, FTX-1 | radio file | `jayt` (owner's project, in development) |
-| Hytera HP785, HM785 | `.rcdx` | `hytera_reverse` for now; later a jayt-like Hytera product |
+| Hytera HP785, HM785 | `.rcdx` | the owner's Hytera tool (private) for now; later a jayt-like Hytera product |
 
 ## Requirements
 
@@ -65,20 +65,21 @@ Each requirement has an acceptance criterion. Tests are data-free: synthetic cha
   - The path and commit of jayt are set in `fleet.yaml`.
   - If jayt lacks a needed command, the renderer stops after writing the radio document and reports the gap.
   - *Accept:* with a fake jayt, the renderer edits the channels, calls import and check with the right arguments, and leaves all other keys of the document unchanged.
-- **R9 Hytera through hytera_reverse.**
+- **R9 Hytera through the Hytera tool.**
+  - The Hytera tool is the owner's private CLI for `.rcdx` files. The repository does not name it or its scripts: `tools.hytera` in the data-root `fleet.yaml` (R13) holds its export and import command lines, with placeholders for the base, factory, document and output files.
   - The same adapter interface calls:
-    - `rcdx_yaml.py --lossless` on the base file;
-    - `rcdx_import.py --secrets-from BASE --defaults-from FACTORY` after the edit;
-    - its post-check.
+    - the export command, which writes a lossless YAML document of the base file;
+    - the import command after the edit, which rebuilds the `.rcdx` file with the secrets of the base file and the defaults of a factory file;
+    - its post-check: the import decodes its result again and fails, naming the field, when a value differs.
   - The renderer edits digital and analog channels, contacts, RX group lists and zones.
   - Base files stay outside the repo, and no secret is ever written to the repo, to `build/` logs or to the terminal.
-  - A later Hytera tool replaces the adapter without a change to the model or the profiles.
+  - A later Hytera tool replaces the adapter's command lines without a change to the model or the profiles.
   - *Accept:* with a fake tool, the renderer produces the expected YAML edit and the expected tool calls, and the base path never appears in a committed file.
 - **R10 Verify gate.**
   - `fleet build` runs each output's check:
     - `dmrconf verify`;
     - `jayt check`;
-    - the post-check of `rcdx_import`;
+    - the post-check of the Hytera tool's import;
     - the CSV row and column checks.
   - A failed check fails the build for that radio, with the tool's message.
   - *Accept:* a failing fake check gives a non-zero exit and names the radio.
@@ -106,7 +107,7 @@ Each requirement has an acceptance criterion. Tests are data-free: synthetic cha
 
 ## Rules
 
-- **G1 No radio access.** radio-fleet never talks to a radio, and nothing in it opens a serial or USB port. Writing a file to a radio is the owner's manual step in qdmr, CHIRP, ADMS, jayt or hytera_reverse.
+- **G1 No radio access.** radio-fleet never talks to a radio, and nothing in it opens a serial or USB port. Writing a file to a radio is the owner's manual step in qdmr, CHIRP, ADMS, jayt or the Hytera tool.
 - **G2 Data policy.**
   - This repository is public. It has code, tests and synthetic example data (`examples/`), and nothing of the owner's real data: no real own lists, overrides, home locator, DMR ID or base file.
   - The owner's private data repository (R13) may commit:
