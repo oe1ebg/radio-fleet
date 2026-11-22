@@ -33,13 +33,18 @@ class McpCli:
     def fetch_csv(self, source: str) -> str:
         with tempfile.TemporaryDirectory(prefix="fleet-mcp-") as tmp:
             out = Path(tmp) / f"{source}.csv"
-            result = subprocess.run(
-                [*self._command, "--source", source, "--output-format", "csv", "--output-file", str(out), "--no-cache"],
-                capture_output=True,
-                text=True,
-                cwd=tmp,
-            )
+            args = ["--source", source, "--output-format", "csv", "--output-file", str(out), "--no-cache"]
+            try:
+                result = subprocess.run([*self._command, *args], capture_output=True, text=True, cwd=tmp)
+            except FileNotFoundError:
+                raise FetchError(f"memory-channels-processor is not installed: {self._command[0]} not found") from None
+            except (OSError, UnicodeDecodeError) as error:
+                raise FetchError(f"memory-channels-processor failed for source {source!r}: {error}") from None
             if result.returncode != 0 or not out.exists():
                 message = result.stderr.strip() or result.stdout.strip() or f"exit status {result.returncode}"
                 raise FetchError(f"memory-channels-processor failed for source {source!r}: {message}")
-            return out.read_text(encoding="utf-8")
+            try:
+                return out.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as error:
+                message = f"memory-channels-processor output for source {source!r} is unreadable: {error}"
+                raise FetchError(message) from None
