@@ -40,6 +40,6 @@ class McpCli:
                 cwd=tmp,
             )
             if result.returncode != 0 or not out.exists():
-                message = (result.stderr.strip() or result.stdout.strip() or f"exit status {result.returncode}")
+                message = result.stderr.strip() or result.stdout.strip() or f"exit status {result.returncode}"
                 raise FetchError(f"memory-channels-processor failed for source {source!r}: {message}")
             return out.read_text(encoding="utf-8")
