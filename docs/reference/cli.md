@@ -46,7 +46,7 @@ oevsv-repeater-db: 251 channels in snapshots/oevsv-repeater-db.csv
 fleet select [--data DATA] [--fleet FLEET] [--snapshots SNAPSHOTS] --radio RADIO [--sources SOURCES]
 ```
 
-Prints the selection of one radio: its channels, zones, drops with reasons and applied overrides. It writes no file.
+Prints the selection of one radio: its channels, zones, scan lists, drops with reasons and applied overrides. It writes no file.
 
 | Option | Meaning |
 |---|---|
@@ -55,7 +55,7 @@ Prints the selection of one radio: its channels, zones, drops with reasons and a
 
 ```text
 $ fleet select --radio uv5r-mini
-uv5r-mini (Baofeng UV-5R mini): 5 channels, 0 zones
+uv5r-mini (Baofeng UV-5R mini): 5 channels, 0 zones, 0 scan lists
   2m Call          RX 145.50000 TX 145.50000 FM power 5W [simplex]
   ...
 drops: 6
@@ -64,7 +64,7 @@ drops: 6
 overrides: 0
 ```
 
-Each channel line shows the name, the RX and TX frequency in MHz, the mode, then each value the channel has: tones, color code (`CC1`), time slot (`TS1`), talkgroup, RX group list and power. The source is in brackets: the own list or the upstream source. Each zone line lists the names of its channels.
+Each channel line shows the name, the RX and TX frequency in MHz, the mode, then each value the channel has: tones, color code (`CC1`), time slot (`TS1`), talkgroup, RX group list and power. The source is in brackets: the own list or the upstream source. Each zone and scan list line lists the names of its channels; a hand-made channel of the base that the rule names with `base_channel` is marked `(base)`.
 
 `fleet select` checks every profile of the fleet file, not only the selected one. A missing own list, template, base or factory file of any radio fails it.
 

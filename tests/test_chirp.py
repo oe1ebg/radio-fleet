@@ -27,7 +27,7 @@ def radio() -> Radio:
 
 
 def render(*channels: Channel) -> list[str]:
-    text = chirp.render(Selection(radio(), channels, (), (), ()))
+    text = chirp.render(Selection(radio(), channels, (), (), (), ()))
     chirp.check(text, radio().capability)
     lines = text.splitlines()
     assert lines[0] == HEADER

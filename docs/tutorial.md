@@ -60,14 +60,14 @@ The snapshot has 6 synthetic repeaters. One of them carries FM and C4FM, so it g
 
 ## 4. See what a radio gets
 
-`fleet select` prints the channels that one radio carries, its zones, the channels it drops with the reason, and the overrides it applies.
+`fleet select` prints the channels that one radio carries, its zones and scan lists, the channels it drops with the reason, and the overrides it applies.
 
 ```sh
 fleet select --radio uv5r-mini
 ```
 
 ```text
-uv5r-mini (Baofeng UV-5R mini): 5 channels, 0 zones
+uv5r-mini (Baofeng UV-5R mini): 5 channels, 0 zones, 0 scan lists
   2m Call          RX 145.50000 TX 145.50000 FM power 5W [simplex]
   70cm Call        RX 433.50000 TX 433.50000 FM power 5W [simplex]
   XX1AA            RX 145.60000 TX 145.00000 FM tone TX CTCSS 88.5 tone RX CTCSS 88.5 power 5W [oevsv-repeater-db]
@@ -123,7 +123,7 @@ This step needs `dmrconf`. If it is not installed, the build fails with `dmrconf
    ```
 
    ```text
-   d878uv2plus (AnyTone D878UV II Plus): 8 channels, 4 zones
+   d878uv2plus (AnyTone D878UV II Plus): 8 channels, 4 zones, 2 scan lists
      2m Call          RX 145.50000 TX 145.50000 FM power High [simplex]
      70cm Call        RX 433.50000 TX 433.50000 FM power High [simplex]
      DMR Simplex      RX 433.45000 TX 433.45000 DMR CC1 TS1 talkgroup TG99 power High [simplex]
@@ -135,7 +135,9 @@ This step needs `dmrconf`. If it is not installed, the build fails with `dmrconf
    zone Simplex: 2m Call, 70cm Call, DMR Simplex
    zone FM 2m: 2m Call, XX1AA, XX3DD
    zone FM 70cm: 70cm Call, XX1CC
-   zone DMR: DMR Simplex, XX1BB 1 TG232, XX1BB 2 TG9
+   zone DMR: Hotspot (base), DMR Simplex, XX1BB 1 TG232, XX1BB 2 TG9
+   scan list FM: 2m Call, 70cm Call, XX1AA, XX1CC, XX3DD
+   scan list DMR: Hotspot (base), DMR Simplex, XX1BB 1 TG232, XX1BB 2 TG9
    drops: 4
      XX5FF: 310 km from JJ00mm, beyond 80 km
      C4FM Call: mode C4FM not supported
@@ -154,7 +156,9 @@ This step needs `dmrconf`. If it is not installed, the build fails with `dmrconf
    d878uv2plus: build/d878uv2plus/d878uv2plus.yaml
    ```
 
-The build merged the selection into the base `bases/qdmr/d878uv2plus.yaml` and ran `dmrconf verify --radio d878uv2` on the result. Every object it added has an id that starts with `gen_`. The hand-made objects of the base are unchanged, and the base contact for talkgroup 9 is reused.
+`Hotspot (base)` is the hand-made channel `Hotspot` of the base: the profile's DMR zone and scan list name it with `base_channel`.
+
+The build merged the selection into the base `bases/qdmr/d878uv2plus.yaml` and ran `dmrconf verify --radio d878uv2` on the result. Every object it added has an id that starts with `gen_`. Each generated channel refers to its scan list. The hand-made objects of the base are unchanged, and the base contact for talkgroup 9 is reused.
 
 ## 7. Read the change report
 

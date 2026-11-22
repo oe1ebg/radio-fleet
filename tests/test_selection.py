@@ -38,6 +38,8 @@ radios:
       channels: 5
       zones: 2
       zone_channels: 2
+      scan_lists: 2
+      scan_list_channels: 3
       name_length: 10
     region: {locator: JJ00mm, max_km: 50}
     own_lists: [synthetic]
@@ -47,6 +49,11 @@ radios:
       - {name: DMR, mode: DMR, band: 70cm}
       - {name: Empty, tag: nothing}
       - {name: Own, source: synthetic}
+    scan_lists:
+      - {name: Mixed, mode: FM, base_channel: [Hand 1, Hand 2]}
+      - {name: Hand, base_channel: Hand 3}
+      - {name: Empty, tag: nothing}
+      - {name: DMR, mode: DMR}
     power: High
     naming: {replace: {" TS1 ": " 1 "}}
   mono:
@@ -113,6 +120,14 @@ def test_selection_of_a_synthetic_fleet(synthetic: tuple[fleet.Fleet, sources.So
         Drop("XX1FM", "not in zone FM: it holds 2 channels at most"),
         Drop("zone Empty", "matches no channel"),
         Drop("zone Own", "zone limit of 2 reached"),
+        Drop("S2", "not in scan list Mixed: it holds 3 channels at most"),
+        Drop("XX1FM", "not in scan list Mixed: it holds 3 channels at most"),
+        Drop("scan list Empty", "matches no channel"),
+        Drop("scan list DMR", "scan list limit of 2 reached"),
+    ]
+    assert [(s.name, s.base_channels, [c.name for c in s.channels]) for s in dual.scan_lists] == [
+        ("Mixed", ("Hand 1", "Hand 2"), ["S1"]),
+        ("Hand", ("Hand 3",), []),
     ]
     assert [(a.channel, a.override.reason) for a in dual.overrides] == [("XX1FM", "synthetic reason")]
 
@@ -127,6 +142,7 @@ def test_selection_of_a_synthetic_fleet(synthetic: tuple[fleet.Fleet, sources.So
         ("Own", ["S1"]),
         ("XX1", ["XX1FM", "XX1ZZ"]),
     ]
+    assert mono.scan_lists == ()
     assert list(mono.drops) == [
         Drop("XX2FM", "callsign outside the region prefixes XX1"),
         Drop("S2", "RX 433.50000 MHz outside the RX bands"),
@@ -169,12 +185,41 @@ def test_a_profile_naming_a_missing_file_is_refused_with_the_file(
         (("band: 70cm", "band: 23cm"), "no band '23cm'"),
         (("renderer: qdmr", "renderer: cps"), "renderer must be one of"),
         (("rx: [400, 480]", "rx: [480, 400]"), r"\[low, high\]"),
+        (
+            (
+                "{name: Own, source: synthetic}\n      - {name: XX1",
+                "{name: Own, base_channel: Hand}\n      - {name: XX1",
+            ),
+            r"radios\.mono\.zones\S*base_channel: only the qdmr renderer takes base channels",
+        ),
     ],
 )
 def test_an_invalid_fleet_file_is_refused_with_its_place(tmp_path: Path, change: tuple[str, str], message: str) -> None:
     (tmp_path / "fleet.yaml").write_text(FLEET.replace(*change))
     with pytest.raises(ConfigError, match=message):
         fleet.load(tmp_path / "fleet.yaml", tmp_path)
+
+
+def test_a_profile_without_zone_or_scan_list_limits_keeps_all_its_zones_and_scan_lists(
+    tmp_path: Path, synthetic: tuple[fleet.Fleet, sources.Sources]
+) -> None:
+    limits = "      zones: 2\n      zone_channels: 2\n      scan_lists: 2\n      scan_list_channels: 3\n"
+    assert limits in FLEET
+    (tmp_path / "fleet.yaml").write_text(FLEET.replace(limits, ""))
+    dual = select(fleet.load(tmp_path / "fleet.yaml", tmp_path).radios["dual"], UPSTREAM, synthetic[1])
+    assert [(z.name, len(z.channels)) for z in dual.zones] == [("FM", 3), ("DMR", 2), ("Own", 2)]
+    assert [(s.name, len(s.base_channels) + len(s.channels)) for s in dual.scan_lists] == [
+        ("Mixed", 5),
+        ("Hand", 1),
+        ("DMR", 2),
+    ]
+    group_drops = [
+        d for d in dual.drops if d.name.startswith(("zone ", "scan list ")) or d.reason.startswith("not in ")
+    ]
+    assert group_drops == [
+        Drop("zone Empty", "matches no channel"),
+        Drop("scan list Empty", "matches no channel"),
+    ]
 
 
 def test_locator_centre_and_distance() -> None:

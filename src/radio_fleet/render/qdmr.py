@@ -1,21 +1,22 @@
 """qdmr renderer (R5): merges a radio's selection into its base qdmr YAML codeplug.
 
 Everything of the base stays: settings, radio IDs, positioning, roaming and every hand-made object.
-Generated contacts, group lists, channels and zones carry ids that start with `gen_`, so a rebuild first
-removes the generated objects of the base and then adds the new ones. Scan lists are not generated (a
-profile has no scan list rules), but generated ones are removed like the others.
+Generated contacts, group lists, channels, zones and scan lists carry ids that start with `gen_`, so a
+rebuild first removes the generated objects of the base and then adds the new ones. Generated zones and
+scan lists can take hand-made channels of the base by name.
 """
 
 from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 import yaml
 
 from radio_fleet.model import Channel, Ctcss, Mode, Tone
-from radio_fleet.selection import Selection
+from radio_fleet.selection import Group, Selection
 from radio_fleet.sources import Sources
 
 PREFIX = "gen_"
@@ -45,6 +46,32 @@ for _tag, _pattern, _first in (
     _Loader.add_implicit_resolver(_tag, re.compile(_pattern), _first)
 
 
+@dataclass(frozen=True, slots=True)
+class _Tagged:
+    """A scalar with one of qdmr's own tags: `!default` (the radio's default value) or `!selected` (the
+    selected channel)."""
+
+    tag: str
+    value: str
+
+
+class _Dumper(yaml.SafeDumper):
+    pass
+
+
+def _construct_tagged(loader: yaml.SafeLoader, node: yaml.ScalarNode) -> _Tagged:
+    return _Tagged(node.tag, loader.construct_scalar(node))
+
+
+def _represent_tagged(dumper: yaml.SafeDumper, tagged: _Tagged) -> yaml.Node:
+    return dumper.represent_scalar(tagged.tag, tagged.value)
+
+
+for _qdmr_tag in ("!default", "!selected"):
+    _Loader.add_constructor(_qdmr_tag, _construct_tagged)
+_Dumper.add_representer(_Tagged, _represent_tagged)
+
+
 def load(text: str) -> object:
     return yaml.load(text, Loader=_Loader)
 
@@ -58,57 +85,87 @@ def render(selection: Selection, sources: Sources, base: str) -> str:
     if not isinstance(document, dict) or not all(isinstance(document.get(key) or [], list) for key in _LISTS):
         raise RenderError(f"the base is not a qdmr codeplug: expected a mapping with the lists {', '.join(_LISTS)}")
     kept = {key: [item for item in document.get(key) or [] if not _generated(item)] for key in _LISTS}
-    generated = _Generator(selection, sources, kept["contacts"]).objects()
+    generated = _Generator(selection, sources, kept["contacts"], kept["channels"]).objects()
     for key in _LISTS:
         if key in document or generated[key]:
             document[key] = kept[key] + generated[key]
-    return yaml.safe_dump(document, sort_keys=False, allow_unicode=True, default_flow_style=False)
+    return yaml.dump(document, Dumper=_Dumper, sort_keys=False, allow_unicode=True, default_flow_style=False)
 
 
 def _generated(item: object) -> bool:
+    inner = _object(item)
+    return inner is not None and str(inner.get("id", "")).startswith(PREFIX)
+
+
+def _object(item: object) -> dict[Any, Any] | None:
     """A list item is either an object or, for contacts, channels and positioning, `{type: object}`."""
     if isinstance(item, dict) and len(item) == 1:
         (inner,) = item.values()
         if isinstance(inner, dict):
             item = inner
-    return isinstance(item, dict) and str(item.get("id", "")).startswith(PREFIX)
+    return item if isinstance(item, dict) else None
 
 
 class _Generator:
-    def __init__(self, selection: Selection, sources: Sources, contacts: Iterable[object]) -> None:
+    def __init__(
+        self, selection: Selection, sources: Sources, contacts: Iterable[object], channels: Iterable[object]
+    ) -> None:
         self._selection = selection
         self._sources = sources
         self._existing = _group_call_ids(contacts)
+        self._hand_made = _channel_ids(channels)
         self._contacts: dict[int, dict[str, Any]] = {}
         self._group_lists: dict[str, dict[str, Any]] = {}
 
     def objects(self) -> dict[str, list[dict[str, Any]]]:
         channel_ids: dict[Channel, str] = {}
-        channels: list[dict[str, Any]] = []
         for channel in self._selection.channels:
-            if channel in channel_ids:
-                continue
-            channel_ids[channel] = f"{PREFIX}ch{len(channel_ids) + 1}"
-            channels.append(self._channel(channel, channel_ids[channel]))
+            channel_ids.setdefault(channel, f"{PREFIX}ch{len(channel_ids) + 1}")
         zones = [
-            {"id": f"{PREFIX}zone{i}", "name": zone.name, "A": [channel_ids[c] for c in zone.channels]}
+            {"id": f"{PREFIX}zone{i}", "name": zone.name, "A": self._members("zone", zone, channel_ids)}
             for i, zone in enumerate(self._selection.zones, 1)
+        ]
+        scan_lists: list[dict[str, Any]] = []
+        scan_list_ids: dict[Channel, str] = {}
+        for i, scan in enumerate(self._selection.scan_lists, 1):
+            scan_id = f"{PREFIX}scan{i}"
+            scan_lists.append(
+                {"id": scan_id, "name": scan.name, "channels": self._members("scan list", scan, channel_ids)}
+            )
+            for channel in scan.channels:
+                # A qdmr channel names one scan list: the first one that takes it.
+                scan_list_ids.setdefault(channel, scan_id)
+        channels = [
+            self._channel(channel, channel_id, scan_list_ids.get(channel))
+            for channel, channel_id in channel_ids.items()
         ]
         return {
             "contacts": [{"dmr": contact} for contact in self._contacts.values()],
             "groupLists": list(self._group_lists.values()),
             "channels": channels,
             "zones": zones,
-            "scanLists": [],
+            "scanLists": scan_lists,
         }
 
-    def _channel(self, channel: Channel, channel_id: str) -> dict[str, Any]:
+    def _members(self, kind: str, group: Group, channel_ids: Mapping[Channel, str]) -> list[str]:
+        ids = []
+        for name in group.base_channels:
+            found = self._hand_made.get(name, [])
+            if len(found) != 1:
+                count = "no hand-made channel" if not found else f"{len(found)} hand-made channels"
+                raise RenderError(f"{kind} {group.name}: {count} named {name!r} in the base")
+            ids.append(found[0])
+        return ids + [channel_ids[channel] for channel in group.channels]
+
+    def _channel(self, channel: Channel, channel_id: str, scan_list_id: str | None) -> dict[str, Any]:
         fields: dict[str, Any] = {
             "id": channel_id,
             "name": channel.name,
             "rxFrequency": _mhz(channel.rx_hz),
             "txFrequency": _mhz(channel.tx_hz),
         }
+        if scan_list_id is not None:
+            fields["scanListRef"] = scan_list_id
         if channel.power is not None:
             if channel.power not in POWERS:
                 raise RenderError(f"channel {channel.name}: power {channel.power!r} is not one of {', '.join(POWERS)}")
@@ -161,6 +218,16 @@ def _group_call_ids(contacts: Iterable[object]) -> Mapping[int, str]:
         number, contact_id = str(contact.get("number", "")), contact.get("id")
         if number.isdigit() and isinstance(contact_id, str):
             ids.setdefault(int(number), contact_id)
+    return ids
+
+
+def _channel_ids(channels: Iterable[object]) -> Mapping[str, list[str]]:
+    """The ids of the hand-made channels by name."""
+    ids: dict[str, list[str]] = {}
+    for item in channels:
+        channel = _object(item)
+        if channel is not None and isinstance(channel.get("id"), str):
+            ids.setdefault(str(channel.get("name")), []).append(channel["id"])
     return ids
 
 

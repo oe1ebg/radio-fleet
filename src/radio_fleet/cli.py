@@ -58,7 +58,7 @@ def main(
     fetch.add_argument("--offline", action="store_true", help="read the existing snapshots instead of the network")
 
     commands.add_parser(
-        "select", parents=[common, with_sources], help="print the channels, zones and drops of one radio"
+        "select", parents=[common, with_sources], help="print the channels, zones, scan lists and drops of one radio"
     )
     commands.add_parser(
         "build",
@@ -192,11 +192,16 @@ def _radio(the_fleet: fleet.Fleet, radio_id: str) -> fleet.Radio:
 
 def _print(selection: Selection) -> None:
     radio = selection.radio
-    print(f"{radio.id} ({radio.model}): {len(selection.channels)} channels, {len(selection.zones)} zones")
+    print(
+        f"{radio.id} ({radio.model}): {len(selection.channels)} channels, {len(selection.zones)} zones, "
+        f"{len(selection.scan_lists)} scan lists"
+    )
     for channel in selection.channels:
         print(f"  {_describe(channel)}")
-    for zone in selection.zones:
-        print(f"zone {zone.name}: {', '.join(channel.name for channel in zone.channels)}")
+    for kind, groups in (("zone", selection.zones), ("scan list", selection.scan_lists)):
+        for group in groups:
+            members = [*(f"{name} (base)" for name in group.base_channels), *(c.name for c in group.channels)]
+            print(f"{kind} {group.name}: {', '.join(members)}")
     print(f"drops: {len(selection.drops)}")
     for drop in selection.drops:
         print(f"  {drop.name}: {drop.reason}")

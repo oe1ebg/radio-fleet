@@ -39,6 +39,7 @@ def test_a_before_and_after_pair_gives_the_expected_report(tmp_path: Path) -> No
         radio,
         after,
         (),
+        (),
         (Drop("XX1FA", "TX 435.00000 MHz outside the TX bands"),),
         (AppliedOverride("XX1AA", Mode.FM, override),),
     )
@@ -86,7 +87,7 @@ def test_a_before_and_after_pair_gives_the_expected_report(tmp_path: Path) -> No
 
 def test_the_first_build_compares_against_nothing_and_an_unbuilt_radio_says_so(tmp_path: Path) -> None:
     radios = fleet.load(EXAMPLES / "fleet.yaml", EXAMPLES).radios
-    selection = Selection(radios["rt95"], (CALL,), (), (), ())
+    selection = Selection(radios["rt95"], (CALL,), (), (), (), ())
     record.write_build(selection, tmp_path / "build" / "rt95")
 
     changes.write([radios["rt95"], radios["hm785"]], tmp_path / "build", tmp_path / "applied.yaml")
@@ -106,7 +107,7 @@ def test_the_first_build_compares_against_nothing_and_an_unbuilt_radio_says_so(t
 def lists(before: tuple[Channel, ...], after: tuple[Channel, ...], tmp_path: Path) -> dict[str, list[str]]:
     """The Added, Removed and Changed items of the uv5r-mini's report for an applied and a built set."""
     radio = fleet.load(EXAMPLES / "fleet.yaml", EXAMPLES).radios["uv5r-mini"]
-    record.write_build(Selection(radio, after, (), (), ()), tmp_path / "build" / "uv5r-mini")
+    record.write_build(Selection(radio, after, (), (), (), ()), tmp_path / "build" / "uv5r-mini")
     applied = tmp_path / "applied.yaml"
     record.save_applied(
         applied, {"uv5r-mini": Applied("2026-01-02", "sha256:00", tuple(map(record.channel_record, before)))}
@@ -149,7 +150,7 @@ def test_a_unique_name_that_changes_mode_is_a_change(tmp_path: Path) -> None:
 
 def test_an_unreadable_build_record_is_reported_and_the_other_radios_still_are(tmp_path: Path) -> None:
     radios = fleet.load(EXAMPLES / "fleet.yaml", EXAMPLES).radios
-    record.write_build(Selection(radios["rt95"], (CALL,), (), (), ()), tmp_path / "build" / "rt95")
+    record.write_build(Selection(radios["rt95"], (CALL,), (), (), (), ()), tmp_path / "build" / "rt95")
     (tmp_path / "build" / "uv5r-mini").mkdir()
     (tmp_path / "build" / "uv5r-mini" / "selection.yaml").write_text("channels: [")
 

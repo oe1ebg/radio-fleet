@@ -38,7 +38,7 @@ There is one `##` section per radio of `fleet.yaml`, in the order of the file. A
 | Added | `<label>: <field> <value>, ...`: a channel of the build that the applied build does not have |
 | Removed | `<label>: <field> <value>, ...`: a channel of the applied build that the build does not have |
 | Changed | `<label>: <field> <before> -> <after>; ...`: only the fields that differ; `-` stands for a field the channel does not have |
-| Drops | `<name>: <reason>`: each channel and zone that the selection dropped |
+| Drops | `<name>: <reason>`: each channel, zone and scan list that the selection dropped |
 | Overrides | `<callsign> <mode>: <field>=<value>, ... (<reason>)`: each override that the build applied |
 
 Example:

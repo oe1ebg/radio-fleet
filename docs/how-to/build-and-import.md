@@ -36,7 +36,7 @@ Needs: `dmrconf` from qdmr 0.15 on the `PATH`.
 
 5. Open `build/d878uv2plus/d878uv2plus.yaml` in qdmr, review it, and write it to the radio.
 
-The build keeps everything of the base and adds contacts, group lists, channels and zones whose ids start with `gen_`. A rebuild first removes every `gen_` object, so do not give a hand-made object an id that starts with `gen_`. The build writes no scan lists. Zones get their channels in list A.
+The build keeps everything of the base and adds contacts, group lists, channels, zones and scan lists whose ids start with `gen_`. A rebuild first removes every `gen_` object, so do not give a hand-made object an id that starts with `gen_`. Zones get their channels in list A. Each generated channel refers to the first scan list that takes it. A zone or scan-list rule can add hand-made channels of the base by name with `base_channel`; a name that no hand-made channel or more than one has fails the build. The base can use qdmr's own tags `!default` and `!selected`; the build keeps them.
 
 The check is `dmrconf verify --radio <dmrconf_radio>`. If it fails, the build shows dmrconf's message:
 

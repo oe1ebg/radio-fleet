@@ -15,7 +15,7 @@ from radio_fleet.mcp import ExportError, McpCli
 from radio_fleet.model import Channel, Ctcss, Dcs, Mode
 from radio_fleet.render import ft5d
 from radio_fleet.render.csvcheck import CsvCheckError
-from radio_fleet.selection import Selection, Zone
+from radio_fleet.selection import Group, Selection
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 FIRST_BANK = 28
@@ -31,11 +31,11 @@ REPEATER_C4FM = Channel("XX0RP", 145_612_500, 145_012_500, Mode.C4FM)
 DIGITAL = Channel("XX0DN", 438_962_500, 431_362_500, Mode.C4FM)
 TONE = Channel("XX0TN", 438_650_000, 431_050_000, Mode.FM, tone_tx=Ctcss(123.0))
 CHANNELS = (SIMPLEX, REPEATER_FM, REPEATER_C4FM, DIGITAL, TONE)
-ZONES = (Zone("Simplex", (SIMPLEX,)), Zone("C4FM", (REPEATER_C4FM, DIGITAL)), Zone("FM", (REPEATER_FM, TONE)))
+ZONES = (Group("Simplex", (SIMPLEX,)), Group("C4FM", (REPEATER_C4FM, DIGITAL)), Group("FM", (REPEATER_FM, TONE)))
 
 
-def selection(channels: tuple[Channel, ...] = CHANNELS, zones: tuple[Zone, ...] = ZONES) -> Selection:
-    return Selection(radio(), channels, zones, (), ())
+def selection(channels: tuple[Channel, ...] = CHANNELS, zones: tuple[Group, ...] = ZONES) -> Selection:
+    return Selection(radio(), channels, zones, (), (), ())
 
 
 def banks(row: Sequence[str]) -> list[int]:
@@ -120,7 +120,7 @@ def test_a_channel_the_ft5d_output_cannot_carry_is_refused(channels: tuple[Chann
 
 
 def test_more_zones_than_banks_are_refused() -> None:
-    zones = tuple(Zone(f"Z{n}", (SIMPLEX,)) for n in range(25))
+    zones = tuple(Group(f"Z{n}", (SIMPLEX,)) for n in range(25))
     with pytest.raises(ft5d.RenderError, match="25 zones, the FT5D has 24 banks"):
         ft5d.render(selection((SIMPLEX,), zones), FakeMcp())
 

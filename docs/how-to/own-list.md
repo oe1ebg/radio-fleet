@@ -35,7 +35,7 @@ An own list is a YAML file in `sources/own/` of the data root. A radio carries t
    ```
 
    ```text
-   uv5r-mini (Baofeng UV-5R mini): 8 channels, 0 zones
+   uv5r-mini (Baofeng UV-5R mini): 8 channels, 0 zones, 0 scan lists
      2m Call          RX 145.50000 TX 145.50000 FM power 5W [simplex]
      70cm Call        RX 433.50000 TX 433.50000 FM power 5W [simplex]
      Hill 2m          RX 145.55000 TX 145.55000 FM power 5W [hills]
@@ -56,7 +56,7 @@ An own list is a YAML file in `sources/own/` of the data root. A radio carries t
   fleet build: uv5r-mini: channel Hill 2m: CHIRP needs the power in watts, such as 5W, not 'Low'
   ```
 - A DMR channel names its talkgroup and RX group list by name. Define them first: see [Talkgroups and RX group lists](talkgroups.md).
-- The list's `tags` and the channel's `tags` both go to the channel. A zone rule can select channels by tag or by `source: hills`.
+- The list's `tags` and the channel's `tags` both go to the channel. A zone or scan-list rule can select channels by tag or by `source: hills`.
 
 If a radio names a list that has no file, every command that reads the sources fails:
 
