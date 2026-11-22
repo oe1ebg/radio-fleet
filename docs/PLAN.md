@@ -26,5 +26,10 @@ Change `fleet-step` only together with its fixtures; `just workflow-test` replay
 | 5 | R8 | jayt adapter and Yaesu renderer (FT-3185 first). |
 | 6 | R9 | Hytera tool adapter and Hytera renderer. |
 | 7 | R11, R12 | `CHANGES.md`, `fleet publish`, `fleet applied`. |
+| 8a | R4, R5 | Zones and scan lists: a limit that is not given means no limit (today it means 0); scan-list rules and generated qdmr scan lists with limits and drops (#21); generated channels refer to their scan list; hand-made base channels join generated zones and scan lists by name; the qdmr base reader keeps `!default` and `!selected`. |
+| 8b | R2, R3, R4 | Channel data: receive-only channels; power levels mapped per radio; overrides narrowed by band, mode and radio that set or clear any field, and a report of overrides that match nothing; several DMR templates per radio; region per mode and excluded callsigns; upstream names that tell the bands of one callsign apart. |
+| 8c | R6, R12 | CHIRP `TStep`, `Skip` and `Comment`; `equipment_dir` per radio for `fleet publish`; CLI fixes: `--data` also before the command, `publish` and `applied` without `--snapshots`, a qdmr power error names the profile or own list instead of the base. |
+
+Steps 8a to 8c close the gaps that the first real builds of the CHIRP and qdmr radios showed. Run them one after the other: all three change selection or the renderers. The FTX-1 and C4FM in the jayt renderer wait for jayt.
 
 After step 2b, the owner creates the private data repository (R13) and seeds the own lists from the current configs there (local, with real data, not in a workflow run). Real qdmr bases go to that repository, not to `bases/` here; step 3 tests use synthetic bases. After each renderer step, the owner builds the real radio once with `--data` and checks `CHANGES.md` against today's hand-made config.

@@ -26,36 +26,50 @@ Each requirement has an acceptance criterion. Tests are data-free: synthetic cha
 - **R2 Channel model.**
   - One canonical model, `radio_fleet.model.Channel`. It has name, RX/TX frequency in Hz, mode (FM, DMR, C4FM, D-STAR), FM tones (CTCSS/DCS, TX and RX), bandwidth, DMR color code, time slot, TX talkgroup and RX group list, power, tags and source.
   - A reader turns MCP snapshot rows into channels. MCP's `freq_tx` and `ctcss_tx` are what the radio transmits.
-  - *Accept:* a snapshot row for an FM repeater and one for a DMR repeater convert into the expected channels.
+  - A channel can be receive-only (for example PMR446 or Freenet). Selection checks only its RX frequency against the radio's bands, and every renderer writes it so that the radio cannot transmit on it, or drops it with a reason when the radio cannot do that.
+  - *Accept:*
+    - a snapshot row for an FM repeater and one for a DMR repeater convert into the expected channels;
+    - a receive-only channel outside the TX bands is kept, and its output cannot transmit.
 - **R3 Own lists.**
   - The owner's lists are YAML files in `sources/own/` of the data root (R13), one list per file, with name, tags and channels in the R2 model. Talkgroups and RX group lists are named in the list and defined once in `sources/talkgroups.yaml`.
-  - `sources/overrides.yaml` changes upstream channels by callsign. Each entry needs a `reason`.
-  - `sources/dmr_templates.yaml` expands one upstream DMR repeater into the owner's standard channels (time slot + talkgroup + RX group, for example `TS1 TG232`, `TS2 TG9`).
+  - `sources/overrides.yaml` changes upstream channels by callsign, optionally narrowed to one band and mode, and optionally to named radios. An override can set or clear any R2 field, tones, time slot, talkgroup and RX group list included. Each entry needs a `reason`. An override that matches no channel is reported.
+  - `sources/dmr_templates.yaml` expands one upstream DMR repeater into the owner's standard channels (time slot + talkgroup + RX group, for example `TS1 TG232`, `TS2 TG9`). A radio profile names a default template and may name other templates for callsigns or callsign prefixes.
   - *Accept:*
     - an override without a reason is refused;
     - an override is applied and reported;
-    - a DMR repeater expands to the template's channels.
+    - an override narrowed to a band changes only that band's channel;
+    - an override that matches nothing is reported;
+    - a DMR repeater expands to the template's channels, and to another template where the profile names one for its callsign.
 - **R4 Radio profiles.**
   - `fleet.yaml` in the data root (R13) names every radio, with:
     - its renderer and base file;
-    - its capability: bands with RX and TX limits, modes, channel/zone/scan-list limits, name length;
-    - the region: a locator and maximum km, or callsign prefixes;
+    - its capability: bands with RX and TX limits, modes, channel/zone/scan-list limits, name length; a limit that is not given means no limit;
+    - the region: a locator and maximum km, or callsign prefixes; optionally a different region per mode, and callsigns to exclude;
     - the own lists it includes;
-    - zone/bank rules, as filter expressions;
-    - power and naming.
+    - zone/bank rules and scan-list rules, as filter expressions;
+    - power: channels carry a power level (Max, High, Mid, Low, Min), and the profile maps the levels to the radio's values (for example watts for CHIRP);
+    - naming: upstream channel names can include the band, so that two bands of one callsign get different names.
   - Selection drops every channel the radio cannot carry and records the reason. An example is a TX frequency outside the radio's TX range.
-  - *Accept:* the selection of a synthetic fleet gives the expected channels per radio and per zone, and the expected list of drops with reasons.
+  - *Accept:*
+    - the selection of a synthetic fleet gives the expected channels per radio, per zone and per scan list, and the expected list of drops with reasons;
+    - a profile without zone or scan-list limits keeps all its zones and scan lists;
+    - a channel with power `High` gets the radio's mapped value in every renderer;
+    - an excluded callsign is dropped with a reason.
 - **R5 qdmr renderer.**
   - Merge the selection into the radio's base qdmr YAML. Keep its settings, radio IDs, APRS/positioning and every hand-made object.
   - Generated contacts, group lists, channels, zones and scan lists carry an id prefix (`gen_`), so a rebuild replaces exactly the generated objects.
   - Reuse an existing contact with the same number instead of adding a second one.
+  - Generate scan lists from the profile's scan-list rules (R4); generated channels refer to their scan list. Hand-made channels of the base can be members of generated zones and scan lists by name.
+  - Read bases that use qdmr's own YAML tags (`!default`, `!selected`) and keep them.
   - *Accept:* rendering twice gives the same file; hand-made objects are unchanged; `dmrconf verify -R <radio>` passes on a synthetic base (skipped when `dmrconf` is not installed).
 - **R6 CHIRP renderer.**
   - Write the CHIRP CSV with the columns of CHIRP's generic CSV: `Location,Name,Frequency,Duplex,Offset,Tone,rToneFreq,cToneFreq,DtcsCode,DtcsPolarity,RxDtcsCode,CrossMode,Mode,TStep,Skip,Power,Comment,...`.
   - Respect the radio's memory count and name length.
+  - `TStep` comes from the profile (default 12.5 kHz) or the channel; `Skip` comes from the profile's scan rules or the channel; `Comment` is the channel's location or note, not its source id.
   - *Accept:*
     - repeater, simplex, CTCSS and DCS channels give the expected rows;
-    - the memory limit drops channels with a reason.
+    - the memory limit drops channels with a reason;
+    - a profile step of 5 kHz and a skipped channel give the expected `TStep` and `Skip`.
 - **R7 Yaesu FT5D renderer.**
   - Write the ADMS-14 import CSV through MCP's `yaesu-ft5d` output, with banks from the profile.
   - *Accept:* a synthetic selection gives a CSV that MCP's own format accepts, with the expected banks.
@@ -91,7 +105,7 @@ Each requirement has an acceptance criterion. Tests are data-free: synthetic cha
   - It compares against the last applied build (R12), or against nothing on the first build.
   - *Accept:* a synthetic before/after pair gives the expected report.
 - **R12 Publish and applied.**
-  - `fleet publish` copies `build/<radio>/` to `<equipment>/<radio>/generated/<date>/`. It never overwrites another file.
+  - `fleet publish` copies `build/<radio>/` to `<equipment>/<folder>/generated/<date>/`, where `<folder>` is the radio's `equipment_dir` from its profile or else its id. It never overwrites another file.
   - `fleet applied <radio>` records the build's digest in `applied.yaml` and prints the git tag command `applied/<radio>/<date>` for the owner.
   - *Accept:* publish refuses an existing target, and applied records the digest.
 - **R13 Data root.**
