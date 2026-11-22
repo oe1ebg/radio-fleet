@@ -83,6 +83,17 @@ def test_a_channel_the_ft5d_output_cannot_carry_is_dropped_and_the_build_passes(
     assert modes == [("FM", "XX1AA"), ("DN", "XX1CC")]
 
 
+def test_a_channel_the_chirp_output_cannot_carry_is_dropped_and_the_build_passes(
+    data: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    own = data / "sources" / "own" / "simplex.yaml"
+    own.write_text(own.read_text() + "  - {name: Off Step, rx: 145.6001, mode: FM}\n")
+    assert main(["select", "--data", str(data), "--radio", "uv5r-mini"]) == 0
+    assert "  Off Step: RX 145.600100 MHz is on no CHIRP tuning step\n" in capsys.readouterr().out
+    assert main(["build", "--data", str(data), "--radio", "uv5r-mini"]) == 0, capsys.readouterr().err
+    assert ",Off Step," not in (data / "build" / "uv5r-mini" / "uv5r-mini.csv").read_text(encoding="utf-8")
+
+
 class FakeMcp:
     def __init__(self, output: str = "", error: str | None = None) -> None:
         self.output, self.error = output, error
