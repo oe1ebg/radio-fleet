@@ -20,7 +20,7 @@ Change `fleet-step` only together with its fixtures; `just workflow-test` replay
 |---|---|---|
 | 1 | R1, R2 | `radio_fleet.model`, MCP fetch to `snapshots/`, snapshot reader; `fleet fetch`. |
 | 2 | R3, R4 | Own lists, talkgroups, overrides, DMR templates; `fleet.yaml` schema and selection; `fleet select --radio R` prints the selection and the drops. Example `fleet.yaml` with every radio of SPEC.md. |
-| 2b | R13, G2 | Data root: `--data` and `FLEET_DATA`; a named file that is missing is an error. Move `fleet.yaml`, `sources/` and `snapshots/` to `examples/` with synthetic data only (replace the locator `JN88ee`). Tests that read example data use `examples/`. Update the layout in README.md and AGENTS.md. |
+| 2b | R13, G2 | Data root: `--data` and `FLEET_DATA`; a named file that is missing is an error. Move `fleet.yaml`, `sources/` and `snapshots/` to `examples/` with synthetic data only. Tests that read example data use `examples/`. Update the layout in README.md and AGENTS.md. |
 | 3 | R5, R10 | qdmr renderer and `dmrconf verify` gate; `fleet build --radio R`. |
 | 4 | R6, R7 | CHIRP and FT5D renderers. |
 | 5 | R8 | jayt adapter and Yaesu renderer (FT-3185 first). |
