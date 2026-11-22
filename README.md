@@ -23,7 +23,7 @@ applied.yaml    the builds that are in the radios (R12)
 build/          build output; never committed
 ```
 
-The data root is `--data DIR`, else the environment variable `FLEET_DATA`, else the current directory. `--fleet`, `--sources` and `--snapshots` still name one path each. A file that `fleet.yaml` names but that is missing is an error.
+The data root is `--data DIR`, else the environment variable `FLEET_DATA`, else the current directory. `--fleet`, `--sources` and `--snapshots` still name one path each. A file that `fleet.yaml` names but that is missing is an error. An own list is in `sources/own/<name>.yaml`, named after its `name:`; a list whose file name differs is refused.
 
 This repository has only synthetic example data, in [`examples/`](examples), which is a valid data root:
 
