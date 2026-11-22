@@ -1,0 +1,27 @@
+[project]
+name = "radio-fleet"
+version = "0.1.0"
+description = "Build CPS files for every radio from one channel source (upstream repeater lists + own lists)"
+authors = [
+    { name = "Erich Birngruber", email = "ebirn@outdated.at" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "memory-channels-processor",
+    "pyyaml>=6.0.4",
+]
+
+[project.scripts]
+fleet = "radio_fleet.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.13.9,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+memory-channels-processor = { git = "https://gitlab.com/oe3lrt/memory-channels-processor.git", rev = "0.2.5" }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]

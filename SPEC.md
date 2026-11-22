@@ -1,0 +1,115 @@
+# radio-fleet specification
+
+## Goal
+
+One build turns the upstream repeater lists and the owner's own channel lists into a checked CPS file for every radio the owner has. A readable report says what changed since the file that is in the radio now.
+
+## Radios
+
+| Radio | Output | Tool that checks or builds it |
+|---|---|---|
+| AnyTone D878UV II Plus, D168UV | qdmr YAML | `dmrconf verify` (qdmr 0.15) |
+| Baofeng UV-5R mini, UV-9R Pro, Retevis RT95 | CHIRP CSV | CHIRP (manual import) |
+| Yaesu FT5D | ADMS-14 CSV | ADMS (manual import) |
+| Yaesu FT-3185, FTX-1 | radio file | `jayt` (owner's project, in development) |
+| Hytera HP785, HM785 | `.rcdx` | `hytera_reverse` for now; later a jayt-like Hytera product |
+
+## Requirements
+
+Each requirement has an acceptance criterion. Tests are data-free: synthetic channels and fake tool adapters, no network and no real radio data.
+
+- **R1 Fetch and snapshot.**
+  - Use memory-channels-processor (MCP), pinned in `pyproject.toml`, to read the upstream sources. The first one is `oevsv-repeater-db`; others come through `fleet.yaml`.
+  - Write one snapshot per source to `snapshots/<source>.csv`, sorted by callsign and frequency, with a fixed column order.
+  - Use MCP's CSV output: in MCP 0.2.5 the JSON output fails with the installed pandas.
+  - *Accept:* two fetches of the same data give byte-identical snapshots, and `--offline` builds from the snapshot without network.
+- **R2 Channel model.**
+  - One canonical model, `radio_fleet.model.Channel`. It has name, RX/TX frequency in Hz, mode (FM, DMR, C4FM, D-STAR), FM tones (CTCSS/DCS, TX and RX), bandwidth, DMR color code, time slot, TX talkgroup and RX group list, power, tags and source.
+  - A reader turns MCP snapshot rows into channels. MCP's `freq_tx` and `ctcss_tx` are what the radio transmits.
+  - *Accept:* a snapshot row for an FM repeater and one for a DMR repeater convert into the expected channels.
+- **R3 Own lists.**
+  - The owner's lists are YAML files in `sources/own/`, one list per file, with name, tags and channels in the R2 model. Talkgroups and RX group lists are named in the list and defined once in `sources/talkgroups.yaml`.
+  - `sources/overrides.yaml` changes upstream channels by callsign. Each entry needs a `reason`.
+  - `sources/dmr_templates.yaml` expands one upstream DMR repeater into the owner's standard channels (time slot + talkgroup + RX group, for example `TS1 TG232`, `TS2 TG9`).
+  - *Accept:*
+    - an override without a reason is refused;
+    - an override is applied and reported;
+    - a DMR repeater expands to the template's channels.
+- **R4 Radio profiles.**
+  - `fleet.yaml` names every radio, with:
+    - its renderer and base file;
+    - its capability: bands with RX and TX limits, modes, channel/zone/scan-list limits, name length;
+    - the region: a locator and maximum km, or callsign prefixes;
+    - the own lists it includes;
+    - zone/bank rules, as filter expressions;
+    - power and naming.
+  - Selection drops every channel the radio cannot carry and records the reason. An example is a TX frequency outside the radio's TX range.
+  - *Accept:* the selection of a synthetic fleet gives the expected channels per radio and per zone, and the expected list of drops with reasons.
+- **R5 qdmr renderer.**
+  - Merge the selection into the radio's base qdmr YAML. Keep its settings, radio IDs, APRS/positioning and every hand-made object.
+  - Generated contacts, group lists, channels, zones and scan lists carry an id prefix (`gen_`), so a rebuild replaces exactly the generated objects.
+  - Reuse an existing contact with the same number instead of adding a second one.
+  - *Accept:* rendering twice gives the same file; hand-made objects are unchanged; `dmrconf verify -R <radio>` passes on a synthetic base (skipped when `dmrconf` is not installed).
+- **R6 CHIRP renderer.**
+  - Write the CHIRP CSV with the columns of CHIRP's generic CSV: `Location,Name,Frequency,Duplex,Offset,Tone,rToneFreq,cToneFreq,DtcsCode,DtcsPolarity,RxDtcsCode,CrossMode,Mode,TStep,Skip,Power,Comment,...`.
+  - Respect the radio's memory count and name length.
+  - *Accept:*
+    - repeater, simplex, CTCSS and DCS channels give the expected rows;
+    - the memory limit drops channels with a reason.
+- **R7 Yaesu FT5D renderer.**
+  - Write the ADMS-14 import CSV through MCP's `yaesu-ft5d` output, with banks from the profile.
+  - *Accept:* a synthetic selection gives a CSV that MCP's own format accepts, with the expected banks.
+- **R8 Yaesu FT-3185 / FTX-1 through jayt.**
+  - An adapter with `export`, `import` and `check` calls the jayt CLI: `jayt export --format yaml`, `jayt import --format ... --template BASE`, `jayt check`.
+  - The renderer edits only the channel part of the radio document.
+  - The path and commit of jayt are set in `fleet.yaml`.
+  - If jayt lacks a needed command, the renderer stops after writing the radio document and reports the gap.
+  - *Accept:* with a fake jayt, the renderer edits the channels, calls import and check with the right arguments, and leaves all other keys of the document unchanged.
+- **R9 Hytera through hytera_reverse.**
+  - The same adapter interface calls:
+    - `rcdx_yaml.py --lossless` on the base file;
+    - `rcdx_import.py --secrets-from BASE --defaults-from FACTORY` after the edit;
+    - its post-check.
+  - The renderer edits digital and analog channels, contacts, RX group lists and zones.
+  - Base files stay outside the repo, and no secret is ever written to the repo, to `build/` logs or to the terminal.
+  - A later Hytera tool replaces the adapter without a change to the model or the profiles.
+  - *Accept:* with a fake tool, the renderer produces the expected YAML edit and the expected tool calls, and the base path never appears in a committed file.
+- **R10 Verify gate.**
+  - `fleet build` runs each output's check:
+    - `dmrconf verify`;
+    - `jayt check`;
+    - the post-check of `rcdx_import`;
+    - the CSV row and column checks.
+  - A failed check fails the build for that radio, with the tool's message.
+  - *Accept:* a failing fake check gives a non-zero exit and names the radio.
+- **R11 Change report.**
+  - `build/CHANGES.md` lists per radio:
+    - the channels added, removed and changed, compared by name and field;
+    - the drops with their reasons;
+    - the overrides applied.
+  - It compares against the last applied build (R12), or against nothing on the first build.
+  - *Accept:* a synthetic before/after pair gives the expected report.
+- **R12 Publish and applied.**
+  - `fleet publish` copies `build/<radio>/` to `<equipment>/<radio>/generated/<date>/`. It never overwrites another file.
+  - `fleet applied <radio>` records the build's digest in `applied.yaml` and prints the git tag command `applied/<radio>/<date>` for the owner.
+  - *Accept:* publish refuses an existing target, and applied records the digest.
+
+## Rules
+
+- **G1 No radio access.** radio-fleet never talks to a radio, and nothing in it opens a serial or USB port. Writing a file to a radio is the owner's manual step in qdmr, CHIRP, ADMS, jayt or hytera_reverse.
+- **G2 Data policy.**
+  - These may be committed:
+    - own lists;
+    - upstream snapshots (ÖVSV data is CC BY 4.0: keep the source columns);
+    - qdmr base files;
+    - `fleet.yaml`.
+  - These are never committed:
+    - Hytera base files or anything derived from them;
+    - radio images;
+    - build output;
+    - secrets.
+  - Tests use synthetic data only.
+
+## Plan
+
+The order of the work is in [`docs/PLAN.md`](docs/PLAN.md).

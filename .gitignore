@@ -1,0 +1,21 @@
+# build output and caches
+/build/
+/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+memory_channels_processor_cache.sqlite
+
+# radio data that must never be committed (see AGENTS.md "Data policy")
+*.rcdx
+*.img
+*.rdt
+*.dfu
+*.FT3185
+*.FTX1
+*.FTX-1
+*.ft5d
+*.pcap
+*.pcapng
+secrets*.yaml
+*.secrets.yaml

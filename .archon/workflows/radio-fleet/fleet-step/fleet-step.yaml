@@ -1,0 +1,51 @@
+name: fleet-step
+description: |
+  Deliver one step of docs/PLAN.md as a reviewed pull request, using Archon's
+  built-in delivery (archon-deliver: implement, draft PR, review, simplify, CI).
+  A preflight checks the tools and that the step exists; merging stays with the owner.
+
+  Use when: "deliver plan step N", "build the next radio-fleet step".
+  NOT for: changing SPEC.md or the plan (the owner does that), or anything that
+  talks to a radio.
+
+inputs:
+  step:
+    required: true
+    description: The step number in the table of docs/PLAN.md.
+  note:
+    default: ""
+    description: Optional extra instructions from the owner for this step.
+
+nodes:
+  - id: preflight
+    bash: |
+      set -eu
+      uv --version
+      just --version
+      git remote get-url origin
+      grep -qE "^\| $INPUTS.step \|" docs/PLAN.md || { echo "step $INPUTS.step is not in docs/PLAN.md" >&2; exit 1; }
+      just ci
+
+  - id: deliver
+    include: archon-deliver
+    depends_on: [preflight]
+    with:
+      work: |-
+        Implement step $INPUTS.step of docs/PLAN.md in this repository (radio-fleet).
+
+        Read AGENTS.md, SPEC.md and docs/PLAN.md first. The step's row in the plan
+        names the requirements; implement exactly those, and meet each acceptance
+        criterion in SPEC.md with a data-free test.
+
+        Rules that hold for this work:
+        - Never talk to a radio, never open a serial or USB port (G1).
+        - Tests are offline and use synthetic data only; never add real codeplugs,
+          radio images, Hytera files or secrets to the repository (G2).
+        - External tools (dmrconf, jayt, hytera_reverse) go through an adapter with
+          a fake for the tests; do not copy their code.
+        - Do not change SPEC.md or docs/PLAN.md. If the step cannot be done as
+          specified, stop and report why.
+        - Checks: `just ci` must pass. Conventional Commits that name the
+          requirement IDs.
+
+        $INPUTS.note
