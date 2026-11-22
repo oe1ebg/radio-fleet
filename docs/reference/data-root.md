@@ -1,0 +1,116 @@
+# Data root reference
+
+The data root is one directory with all of the owner's data. `fleet` takes it from `--data DIR`, else from the environment variable `FLEET_DATA`, else the current directory. `--fleet`, `--snapshots` and `--sources` override one path each.
+
+```text
+fleet.yaml          radios, sources, tools, equipment              written by you
+sources/
+  own/<name>.yaml   own channel lists, one list per file           written by you
+  talkgroups.yaml   talkgroups and RX group lists                  written by you
+  overrides.yaml    changes to upstream channels                   written by you
+  dmr_templates.yaml  DMR templates                                written by you
+snapshots/<source>.csv  upstream snapshots                         written by fleet fetch
+bases/              base files of the renderers, such as bases/qdmr/
+applied.yaml        the build that is in each radio                written by fleet applied
+build/              build output and CHANGES.md                    written by fleet build
+```
+
+| Path | Commit it? |
+|---|---|
+| `fleet.yaml`, `sources/`, `snapshots/`, `applied.yaml` | yes |
+| qdmr bases | yes |
+| jayt base files (radio images), Hytera `.rcdx` files | never |
+| `build/` | never |
+
+A file in `sources/` that does not exist reads as empty. A file that `fleet.yaml` names must exist. All YAML files are read strictly: an unknown key or a wrong value is an error with the file and the key path.
+
+## Own lists
+
+`sources/own/<name>.yaml`, one list per file. The file name without `.yaml` must equal `name`.
+
+| Key | Type | Required | Meaning |
+|---|---|---|---|
+| `name` | string | yes | The list name. Profiles name it in `own_lists`; channels show it as their source. |
+| `tags` | list of strings | no | Tags for every channel of the list. |
+| `channels` | list | yes | The channels. |
+
+A channel has these keys:
+
+| Key | Type | Required | Meaning |
+|---|---|---|---|
+| `name` | string | yes | The channel name. |
+| `rx` | number | yes | The RX frequency in MHz. |
+| `tx` | number | no | The TX frequency in MHz. Default: `rx`. |
+| `mode` | string | yes | `FM`, `DMR`, `C4FM` or `D-STAR`. |
+| `tone_tx`, `tone_rx` | `{ctcss: Hz}` or `{dcs: code}` | no | The tone the radio sends, and the tone it squelches on. A DCS code is 1 to 777. |
+| `bandwidth` | number | no | In kHz. 12.5 or less is narrow. |
+| `color_code` | integer, 0 to 15 | no | DMR color code. |
+| `time_slot` | 1 or 2 | no | DMR time slot. |
+| `tx_talkgroup` | string | no | A talkgroup of `talkgroups.yaml`. |
+| `rx_group_list` | string | no | An RX group list of `talkgroups.yaml`. |
+| `power` | string | no | Wins over the profile's `power`. The values depend on the renderer. |
+| `tags` | list of strings | no | Added to the list's tags. |
+
+## `talkgroups.yaml`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `talkgroups` | mapping name: number | Each talkgroup, with a number from 1 to 16777215. |
+| `rx_group_lists` | mapping name: list of names | Each RX group list, with talkgroups of `talkgroups`. |
+
+## `overrides.yaml`
+
+| Key | Type | Required | Meaning |
+|---|---|---|---|
+| `overrides` | list | no | The overrides, applied in order. |
+| `overrides[].callsign` | string | yes | The upstream callsign. |
+| `overrides[].mode` | string | no | Only the channel of this mode. Default: every mode. |
+| `overrides[].reason` | string | yes | Why. The change report shows it. |
+| `overrides[].set` | mapping | yes | At least one of `name`, `rx`, `tx`, `tone_tx`, `tone_rx`, `bandwidth`, `color_code`, `power`, `tags`, as in an own list. |
+
+`tags` in `set` replaces the channel's tags.
+
+## `dmr_templates.yaml`
+
+| Key | Type | Required | Meaning |
+|---|---|---|---|
+| `templates` | mapping name: list | no | The templates. |
+| `templates.<name>[].name` | string | yes | Appended to the callsign, after a space. |
+| `templates.<name>[].time_slot` | 1 or 2 | yes | The time slot. |
+| `templates.<name>[].tx_talkgroup` | string | yes | A talkgroup of `talkgroups.yaml`. |
+| `templates.<name>[].rx_group_list` | string | no | An RX group list of `talkgroups.yaml`. |
+
+## Snapshots
+
+`snapshots/<source>.csv` is the CSV output of memory-channels-processor 0.2.5 with a fixed column order, sorted by callsign and TX frequency. `fleet fetch` writes it. Do not edit it: correct upstream data with an override.
+
+Each row gives one channel per mode column that is `True` (`fm`, `dmr`, `c4fm`, `dstar`), named after the callsign. `freq_tx` and `ctcss_tx` are what the radio transmits. Tones go to FM channels only; DCS wins over CTCSS. The color code goes to DMR channels. `lat` and `long` place the channel for a locator region. `source_id` is the channel's source.
+
+## `applied.yaml`
+
+Written by `fleet applied`. One entry per radio id:
+
+```yaml
+uv5r-mini:
+  date: '2026-11-22'
+  digest: sha256:2d90061895bed8d3e7885334d39bba4b49964123e67aa1c14fda8d8afdc4c0d7
+  channels:
+  - name: 2m Call
+    rx: '145.50000'
+    tx: '145.50000'
+    mode: FM
+    power: 5W
+  ...
+```
+
+The channels have the fields of the build record below.
+
+## `build/`
+
+| Path | Content |
+|---|---|
+| `build/CHANGES.md` | The change report. See [changes.md](changes.md). |
+| `build/<radio>/<radio>.<ext>` | The checked file. See [cli.md](cli.md#fleet-build). |
+| `build/<radio>/selection.yaml` | The build record: `channels`, `drops` (name and reason) and `overrides` (text). |
+
+A channel in the build record has its `name` and each of these fields that it has, as text: `rx`, `tx` (MHz with 5 decimals), `mode`, `tone_tx`, `tone_rx` (`CTCSS 88.5` or `DCS 023`), `bandwidth` (`12.5 kHz`), `color_code`, `time_slot`, `tx_talkgroup`, `rx_group_list`, `power`.
