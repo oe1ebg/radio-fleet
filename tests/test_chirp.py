@@ -144,6 +144,23 @@ def test_build_writes_the_checked_chirp_csv(tmp_path: Path, capsys: pytest.Captu
     )
 
 
+def test_a_data_root_with_watts_per_channel_builds_unchanged(tmp_path: Path) -> None:
+    data = tmp_path / "data"
+    shutil.copytree(EXAMPLES, data)
+    levels = "{Max: 5W, High: 5W, Mid: 2W, Low: 1W, Min: 0.5W}"
+    fleet_file = data / "fleet.yaml"
+    text = fleet_file.read_text()
+    old_profile = f"    power: High\n    power_levels: &baofeng_power {levels}\n"
+    assert old_profile in text
+    text = text.replace(old_profile, "    power: 5W\n")
+    fleet_file.write_text(text.replace("*baofeng_power", levels))
+    simplex = data / "sources" / "own" / "simplex.yaml"
+    simplex.write_text(simplex.read_text().replace("rx: 145.500, mode: FM}", "rx: 145.500, mode: FM, power: 2W}"))
+    assert main(["build", "--data", str(data), "--radio", "uv5r-mini"]) == 0
+    rows = (data / "build" / "uv5r-mini" / "uv5r-mini.csv").read_text(encoding="utf-8").splitlines()[1:]
+    assert [row.split(",")[15] for row in rows[:2]] == ["2.0W", "5.0W"]
+
+
 def test_a_chirp_render_error_fails_the_build_and_names_the_radio(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

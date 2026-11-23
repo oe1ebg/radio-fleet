@@ -10,9 +10,10 @@ from enum import StrEnum
 from fnmatch import fnmatchcase
 from pathlib import Path
 
-from radio_fleet import config, geo, hytera_tool
+from radio_fleet import config, geo, hytera_tool, power
 from radio_fleet.config import ConfigError, Node
-from radio_fleet.model import Channel, Mode, Position, Power
+from radio_fleet.model import Channel, Mode, Position, Power, Watts
+from radio_fleet.power import PowerError, PowerRange, RadioPower
 from radio_fleet.sources import MHZ, Sources, dmr_templates_path, own_list_path
 
 
@@ -27,34 +28,40 @@ class Renderer(StrEnum):
 RX_ONLY_RENDERERS = frozenset({Renderer.QDMR, Renderer.CHIRP})
 """The renderers that can write a receive-only channel; the others drop it."""
 
-WATTS = re.compile(r"(\d+(?:\.\d+)?)\s*W")
-
 
 @dataclass(frozen=True, slots=True)
 class _PowerValues:
-    """The power values a renderer writes; `defaults` maps the levels the profile leaves out."""
+    """The power values a renderer writes. `defaults` maps the levels the profile leaves out, and `of_watts`
+    gives a level that `power_levels` maps to watts its value; None where the renderer has no such value."""
 
     text: str
     valid: Callable[[str], bool]
     defaults: Mapping[Power, str]
+    of_watts: Callable[[Power, Watts], str] | None
 
 
+_HYTERA_LEVELS = {Power.MAX: "High", Power.HIGH: "High", Power.MID: "Middle", Power.LOW: "Low", Power.MIN: "Low"}
 _POWER_VALUES: Mapping[Renderer, _PowerValues] = {
     Renderer.QDMR: _PowerValues(
-        "Max, High, Mid, Low or Min", lambda value: value in tuple(Power), {level: level.value for level in Power}
+        "Max, High, Mid, Low or Min",
+        lambda value: value in tuple(Power),
+        {level: level.value for level in Power},
+        lambda level, _: level.value,
     ),
-    Renderer.CHIRP: _PowerValues("watts, such as 5W", lambda value: WATTS.fullmatch(value) is not None, {}),
+    Renderer.CHIRP: _PowerValues("watts, such as 5W", lambda _: False, {}, lambda _, watts: str(watts)),
     Renderer.JAYT: _PowerValues(
-        "LOW, LOW2, LOW3 or HIGH", lambda value: value.upper() in ("LOW", "LOW2", "LOW3", "HIGH"), {}
+        "LOW, LOW2, LOW3 or HIGH", lambda value: value.upper() in ("LOW", "LOW2", "LOW3", "HIGH"), {}, None
     ),
     Renderer.HYTERA: _PowerValues(
         "High, Middle or Low",
         lambda value: value in ("High", "Middle", "Low"),
-        {Power.MAX: "High", Power.HIGH: "High", Power.MID: "Middle", Power.LOW: "Low", Power.MIN: "Low"},
+        _HYTERA_LEVELS,
+        lambda level, _: _HYTERA_LEVELS[level],
     ),
 }
-POWER_RENDERERS = frozenset(_POWER_VALUES)
-"""The renderers that write a power; the FT5D renderer writes none."""
+_WATTS_RENDERERS = frozenset({Renderer.CHIRP})
+_RANGE_RENDERERS: frozenset[Renderer] = frozenset()
+"""The renderers that write the watts of a `power_range`; none yet."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,13 +166,8 @@ class Radio:
     """Templates by callsign or callsign prefix; the longest key a callsign starts with wins."""
     zones: tuple[GroupRule, ...]
     scan_lists: tuple[GroupRule, ...]
-    power: Power | None
-    """The level of a channel that has none."""
-    power_values: Mapping[Power, str]
-    """The radio's value of each level; empty for a renderer that writes no power."""
-    fixed_power: str | None
-    """A `power` that is not a level: the radio's value of every channel. A channel's own level is refused,
-    because such a profile gives no level a value of its own."""
+    power: RadioPower | None
+    """None for a renderer that writes no power."""
     upstream_name: str
     """The name of an upstream channel, a format with the fields callsign, band and site."""
     name_replacements: tuple[tuple[str, str], ...]
@@ -173,9 +175,6 @@ class Radio:
     def template_for(self, callsign: str | None) -> str | None:
         keys = [key for key in self.dmr_templates if callsign is not None and callsign.startswith(key)]
         return self.dmr_templates[max(keys, key=len)] if keys else self.dmr_template
-
-    def power_value(self, level: Power | None) -> str | None:
-        return None if level is None else self.power_values.get(level)
 
 
 @dataclass(frozen=True, slots=True)
@@ -283,6 +282,7 @@ def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
             "scan_lists",
             "power",
             "power_levels",
+            "power_range",
             "naming",
         ],
     )
@@ -301,7 +301,9 @@ def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
         key: tuple(_group_rule(item, capability, renderer) for item in fields[key].items()) if key in fields else ()
         for key in ("zones", "scan_lists")
     }
-    power, power_values, fixed_power = _power(renderer, fields.get("power"), fields.get("power_levels"))
+    radio_power = _power(renderer, fields.get("power"), fields.get("power_levels"), fields.get("power_range"))
+    if "power_range" in fields and renderer not in _RANGE_RENDERERS:
+        raise fields["power_range"].error(f"the {renderer} renderer writes no stepped power range yet")
     upstream_name, replacements = _naming(fields["naming"]) if "naming" in fields else (_UPSTREAM_NAME, ())
     templates = fields["dmr_templates"].entries() if "dmr_templates" in fields else {}
     return Radio(
@@ -318,49 +320,71 @@ def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
         dmr_templates={key: node.text() for key, node in templates.items()},
         zones=rules["zones"],
         scan_lists=rules["scan_lists"],
-        power=power,
-        power_values=power_values,
-        fixed_power=fixed_power,
+        power=radio_power,
         upstream_name=upstream_name,
         name_replacements=replacements,
     )
 
 
-def _power(
-    renderer: Renderer, default: Node | None, levels: Node | None
-) -> tuple[Power | None, Mapping[Power, str], str | None]:
-    """The default level, the radio's value of each level and a fixed power. A `power` that is not a level is
-    the radio's value of every channel, as `power` was before there were levels."""
-    level = _level(default.text()) if default is not None else None
+def _power(renderer: Renderer, default: Node | None, levels: Node | None, stepped: Node | None) -> RadioPower | None:
+    """A `power` that is neither a level nor watts is the radio's value of every channel, as `power` was before
+    levels and watts; such a profile takes no `power_levels`."""
+    request = power.parse(default.text()) if default is not None else None
     values = _POWER_VALUES.get(renderer)
     if values is None:
-        for node in (default if level is None else None, levels):
+        for node in (default if request is None else None, levels, stepped):
             if node is not None:
-                raise node.error(f"the {renderer} renderer writes no power; power takes only a level")
-        return level, {}, None
-
-    def value(node: Node) -> str:
-        text = node.value if isinstance(node.value, str) else ""
-        if not values.valid(text):
-            raise node.error(f"the {renderer} renderer takes the power as {values.text}, not {node.value!r}")
-        return text
-
-    if default is not None and level is None:
-        if levels is not None:
-            raise default.error(f"with power_levels, power is a level: {', '.join(Power)}")
-        fixed = value(default)
-        return Power.HIGH, dict.fromkeys(Power, fixed), fixed
-    mapped = dict(values.defaults)
+                raise node.error(f"the {renderer} renderer writes no power; power takes only a level or watts")
+        return None
+    if default is not None and request is None:
+        if levels is not None or stepped is not None:
+            raise default.error(f"power is a level ({', '.join(Power)}) or watts, such as 5W")
+        if not values.valid(default.text()):
+            raise default.error(f"the {renderer} renderer takes the power as {values.text}, not {default.value!r}")
+        return RadioPower(fixed=default.text())
+    power_range = _power_range(stepped) if stepped is not None else None
+    mapped = {} if power_range is not None else dict(values.defaults)
+    watts: dict[Power, Watts] = {}
     for name, node in (levels.entries() if levels is not None else {}).items():
-        named = _level(name)
-        if named is None:
+        level = power.parse(name)
+        if not isinstance(level, Power):
             raise node.error(f"power levels are {', '.join(Power)}")
-        mapped[named] = value(node)
-    return level, mapped, None
+        value = node.value if isinstance(node.value, str) else ""
+        parsed = power.parse(value)
+        if isinstance(parsed, Watts) and (power_range is not None or values.of_watts is not None):
+            if power_range is not None and not power_range.allows(parsed):
+                raise node.error(f"{parsed} is not a step of power_range")
+            watts[level] = parsed
+            mapped[level] = str(parsed) if values.of_watts is None else values.of_watts(level, parsed)
+        elif power_range is None and values.valid(value):
+            mapped[level] = value
+        else:
+            expected = "watts" if power_range is not None else values.text
+            raise node.error(f"the {renderer} renderer takes the power as {expected}, not {node.value!r}")
+    radio_power = RadioPower(request, mapped, watts, power_range, watts_native=renderer in _WATTS_RENDERERS)
+    if default is not None and request is not None:
+        try:
+            radio_power.resolve(request)
+        except PowerError as error:
+            raise default.error(f"{error} in power_levels") from None
+    return radio_power
 
 
-def _level(text: str) -> Power | None:
-    return Power(text) if text in tuple(Power) else None
+def _power_range(node: Node) -> PowerRange:
+    fields = node.fields(["min", "max", "step"])
+    low, high, step = (_watts(fields[key]) for key in ("min", "max", "step"))
+    if step.value <= 0 or low >= high:
+        raise node.error("expected min below max and a step above 0W")
+    if (high.value - low.value) % step.value != 0:
+        raise fields["max"].error(f"{high} is not {low} plus whole steps of {step}")
+    return PowerRange(low, high, step)
+
+
+def _watts(node: Node) -> Watts:
+    parsed = power.parse(node.value if isinstance(node.value, str) else "")
+    if not isinstance(parsed, Watts):
+        raise node.error(f"expected watts, such as 5W, not {node.value!r}")
+    return parsed
 
 
 def _capability(node: Node) -> Capability:

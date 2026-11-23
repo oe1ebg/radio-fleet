@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -6,7 +7,7 @@ import pytest
 
 from radio_fleet import sources
 from radio_fleet.config import ConfigError
-from radio_fleet.model import Channel, Ctcss, Dcs, Mode, Power
+from radio_fleet.model import Channel, Ctcss, Dcs, Mode, Power, Watts
 
 TALKGROUPS = """
 talkgroups: {TG1: 1, TG2: 2}
@@ -16,7 +17,7 @@ TEMPLATES = """
 templates:
   standard:
     - {name: TS1 TG1, time_slot: 1, tx_talkgroup: TG1, rx_group_list: Both}
-    - {name: TS2 TG2, time_slot: 2, tx_talkgroup: TG2}
+    - {name: TS2 TG2, time_slot: 2, tx_talkgroup: TG2, power: 2W}
 """
 
 
@@ -69,7 +70,7 @@ overrides:
     mode: DMR
     band: 70cm
     reason: the repeater has a local talkgroup
-    set: {time_slot: 2, tx_talkgroup: TG2, rx_group_list: Both, power: Low, rx_only: true}
+    set: {time_slot: 2, tx_talkgroup: TG2, rx_group_list: Both, power: 0.5W, rx_only: true}
     clear: [color_code, tone_rx]
 """
     write(tmp_path, {"talkgroups.yaml": TALKGROUPS, "overrides.yaml": overrides})
@@ -87,7 +88,7 @@ overrides:
             time_slot=2,
             tx_talkgroup="TG2",
             rx_group_list="Both",
-            power=Power.LOW,
+            power=Watts(Decimal("0.5")),
             rx_only=True,
         ),
     ]
@@ -119,6 +120,7 @@ def test_a_dmr_repeater_expands_to_the_template_channels(tmp_path: Path) -> None
             color_code=1,
             time_slot=2,
             tx_talkgroup="TG2",
+            power=Watts(Decimal(2)),
             source="synthetic-db",
         ),
         fm,
@@ -209,8 +211,13 @@ def test_every_channel_key_is_read_into_its_field(tmp_path: Path) -> None:
             r"overrides\[0\]\.clear: 'power' is both set and cleared",
         ),
         (
-            {"own/a.yaml": "name: a\nchannels: [{name: X, rx: 145.5, mode: FM, power: 5W}]\n"},
-            r"own/a\.yaml: channels\[0\]\.power: power is a level: Max, High, Mid, Low, Min",
+            {"own/a.yaml": "name: a\nchannels: [{name: X, rx: 145.5, mode: FM, power: Turbo}]\n"},
+            r"own/a\.yaml: channels\[0\]\.power: power is a level \(Max, High, Mid, Low, Min\) or watts, such as "
+            r"5W, not 'Turbo'",
+        ),
+        (
+            {"dmr_templates.yaml": "templates: {t: [{name: S, time_slot: 1, tx_talkgroup: TG1, power: 5}]}\n"},
+            r"dmr_templates\.yaml: templates\.t\[0\]\.power: power is a level .* not 5",
         ),
         (
             {"own/a.yaml": "name: a\nchannels: [{name: X, rx: 145.5, tx: 145.6, mode: FM, rx_only: true}]\n"},

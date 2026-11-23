@@ -11,8 +11,9 @@ from __future__ import annotations
 import csv
 import io
 
-from radio_fleet.fleet import WATTS, Capability
+from radio_fleet.fleet import Capability
 from radio_fleet.model import Channel, Ctcss, Dcs, Mode, Tone
+from radio_fleet.power import WATTS
 from radio_fleet.render.csvcheck import CsvCheckError, check_memories, check_rows, mhz, rows
 from radio_fleet.selection import Selection
 
@@ -130,7 +131,7 @@ def _step(channel: Channel, offset: int) -> str:
 
 def _power(channel: Channel) -> str:
     """The profile's watts; `fleet.yaml` refuses any other value of a CHIRP radio."""
-    match = WATTS.fullmatch(channel.power or "")
+    match = WATTS.fullmatch(str(channel.power or ""))
     if match is None:
         raise RenderError(
             f"channel {channel.name}: CHIRP needs a power: give the profile a power level and its watts, "

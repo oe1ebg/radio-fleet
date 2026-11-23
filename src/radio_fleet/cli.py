@@ -211,6 +211,9 @@ def _print(selection: Selection) -> None:
     print(f"overrides that match nothing: {len(selection.unmatched_overrides)}")
     for override in selection.unmatched_overrides:
         print(f"  {unmatched_text(override)}")
+    print(f"power set to the nearest value: {len(selection.power_notes)}")
+    for note in selection.power_notes:
+        print(f"  {note}")
 
 
 def _describe(channel: Channel) -> str:

@@ -51,7 +51,7 @@ def _channel(channel: Channel, slot: int) -> dict[str, Any]:
         **_tone(channel),
     }
     if channel.power is not None:
-        fields["tx_power"] = channel.power.upper()
+        fields["tx_power"] = str(channel.power).upper()
     return fields
 
 

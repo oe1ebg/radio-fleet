@@ -40,7 +40,7 @@ _FIELDS: dict[str, Callable[[Channel], str | None]] = {
     "time_slot": lambda channel: _text(channel.time_slot),
     "tx_talkgroup": lambda channel: _text(channel.tx_talkgroup),
     "rx_group_list": lambda channel: _text(channel.rx_group_list),
-    "power": lambda channel: channel.power,
+    "power": lambda channel: _text(channel.power),
     "rx_only": lambda channel: "yes" if channel.rx_only else None,
 }
 FIELDS = tuple(_FIELDS)
@@ -56,6 +56,7 @@ class BuildRecord:
     drops: tuple[Drop, ...]
     overrides: tuple[str, ...]
     unmatched_overrides: tuple[str, ...]
+    power_notes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +111,7 @@ def write_build(selection: Selection, directory: Path) -> None:
         "drops": [{"name": drop.name, "reason": drop.reason} for drop in selection.drops],
         "overrides": [override_text(applied) for applied in selection.overrides],
         "unmatched_overrides": [unmatched_text(override) for override in selection.unmatched_overrides],
+        "power_notes": list(selection.power_notes),
     }
     directory.mkdir(parents=True, exist_ok=True)
     (directory / RECORD).write_text(_dump(document), encoding="utf-8")
@@ -120,13 +122,13 @@ def read_build(directory: Path) -> BuildRecord | None:
     path = directory / RECORD
     if not path.is_file():
         return None
-    fields = config.load(path).fields(["channels", "drops", "overrides"], ["unmatched_overrides"])
+    fields = config.load(path).fields(["channels", "drops", "overrides"], ["unmatched_overrides", "power_notes"])
     drops = []
     for item in fields["drops"].items():
         drop = item.fields(["name", "reason"])
         drops.append(Drop(drop["name"].text(), drop["reason"].text()))
-    unmatched = fields["unmatched_overrides"].texts() if "unmatched_overrides" in fields else ()
-    return BuildRecord(_channels(fields["channels"]), tuple(drops), fields["overrides"].texts(), unmatched)
+    unmatched, notes = (fields[key].texts() if key in fields else () for key in ("unmatched_overrides", "power_notes"))
+    return BuildRecord(_channels(fields["channels"]), tuple(drops), fields["overrides"].texts(), unmatched, notes)
 
 
 def load_applied(path: Path) -> dict[str, Applied]:

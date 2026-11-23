@@ -1,11 +1,12 @@
 from dataclasses import replace
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
 from radio_fleet import fleet, geo, sources
 from radio_fleet.config import ConfigError
-from radio_fleet.model import Channel, Ctcss, Mode, Position, Power
+from radio_fleet.model import Channel, Ctcss, Mode, Position, Power, Watts
 from radio_fleet.selection import Drop, select
 
 SOURCES = {
@@ -315,6 +316,17 @@ STEP_UPSTREAM = [
 ]
 
 
+def watts(value: str | int) -> Watts:
+    return Watts(Decimal(value))
+
+
+def with_listen_power(own: sources.Sources, power: Watts) -> sources.Sources:
+    """The sources with the power of the own list `listen`'s channel set to watts."""
+    listen = own.own_lists["listen"]
+    channels = (replace(listen.channels[0], power=power),)
+    return replace(own, own_lists={**own.own_lists, "listen": replace(listen, channels=channels)})
+
+
 def step(tmp_path: Path, fleet_text: str = STEP) -> tuple[fleet.Fleet, sources.Sources]:
     for name, text in STEP_SOURCES.items():
         (tmp_path / "sources" / name).parent.mkdir(parents=True, exist_ok=True)
@@ -378,26 +390,72 @@ def test_a_power_level_the_profile_does_not_map_fails_with_the_profile_and_the_l
     the_fleet, own = step(
         tmp_path, STEP.replace("    power: High\n    power_levels: {High: Mid}\n", "    power: Low\n")
     )
-    assert the_fleet.radios["qdmr"].power_value(Power.LOW) == "Low"
-    the_fleet, own = step(tmp_path, STEP.replace("{High: 5W, Low: 1W}", "{Low: 1W}"))
+    qdmr_power = the_fleet.radios["qdmr"].power
+    assert qdmr_power is not None
+    assert qdmr_power.resolve(Power.LOW).value == "Low"
+    the_fleet, own = step(tmp_path, STEP.replace("    power: High\n    power_levels: {High: 5W, Low: 1W}\n", ""))
     with pytest.raises(
-        ConfigError, match=r"radios\.chirp\.power_levels: no value for the power High of channel 'Freenet' from listen"
+        ConfigError,
+        match=r"radios\.chirp\.power_levels: no value for the power Low of channel 'XX1AB' from synthetic-db",
     ):
-        select(the_fleet.radios["chirp"], [], own)
+        select(the_fleet.radios["chirp"], STEP_UPSTREAM, own)
 
 
-def test_a_power_that_is_not_a_level_is_the_radio_value_of_every_level(tmp_path: Path) -> None:
+def test_watts_on_a_profile_without_watts_fail_with_the_profile_and_the_list(tmp_path: Path) -> None:
+    the_fleet, own = step(tmp_path)
+    with pytest.raises(
+        ConfigError,
+        match=r"radios\.qdmr\.power_levels: no level with watts for the power 5W of channel 'Freenet' from listen",
+    ):
+        select(the_fleet.radios["qdmr"], [], with_listen_power(own, watts(5)))
+
+
+def test_watts_resolve_to_the_nearest_level_and_are_reported(tmp_path: Path) -> None:
+    profile = "    power: 25W\n    power_levels: {Max: 5W, Low: 1W}\n"
+    the_fleet, own = step(tmp_path, STEP.replace("    power: High\n    power_levels: {High: Mid}\n", profile))
+    own = replace(own, overrides=(sources.Override("XX1AB", "synthetic reason", {"power": watts("0.5")}),))
+    selection = select(the_fleet.radios["qdmr"], STEP_UPSTREAM, own)
+    assert [(c.name, c.power) for c in selection.channels if c.callsign in (None, "XX1AB")] == [
+        ("Freenet", "Max"),
+        ("XX1AB 2m", "Low"),
+        ("XX1AB 70cm", "Low"),
+    ]
+    assert selection.power_notes == (
+        "power of the profile: 25W -> Max (5W)",
+        "XX1AB 2m: 0.5W -> Low (1W)",
+        "XX1AB 70cm: 0.5W -> Low (1W)",
+    )
+
+
+def test_a_template_sets_the_power_and_an_override_wins(tmp_path: Path) -> None:
+    the_fleet, own = step(tmp_path)
+    standard = own.dmr_templates["standard"]
+    own = replace(own, dmr_templates={**own.dmr_templates, "standard": (replace(standard[0], power=Power.MAX),)})
+    upstream = [replace(STEP_UPSTREAM[4], callsign="XX1QZ", name="XX1QZ"), STEP_UPSTREAM[4]]
+    assert [(c.name, c.power) for c in select(the_fleet.radios["qdmr"], upstream, own).channels] == [
+        ("Freenet", "Mid"),
+        ("XX1QZ 70cm S", "Max"),
+        ("XX1DX 70cm E", "Mid"),
+    ]
+    own = replace(own, overrides=(sources.Override("XX1QZ", "synthetic reason", {"power": Power.LOW}),))
+    assert [(c.name, c.power) for c in select(the_fleet.radios["qdmr"], upstream, own).channels][1] == (
+        "XX1QZ 70cm S",
+        "Low",
+    )
+
+
+def test_watts_of_the_old_format_pass_unchanged_to_a_chirp_profile_without_power_levels(tmp_path: Path) -> None:
     the_fleet, own = step(
         tmp_path, STEP.replace("    power: High\n    power_levels: {High: 5W, Low: 1W}\n", "    power: 5W\n")
     )
-    chirp = the_fleet.radios["chirp"]
-    assert (chirp.power, [chirp.power_value(level) for level in Power]) == (Power.HIGH, ["5W"] * 5)
-    kept = select(chirp, [c for c in STEP_UPSTREAM if c.callsign != "XX1AB"], own).channels
-    assert {channel.power for channel in kept} == {"5W"}
+    upstream = [c for c in STEP_UPSTREAM if c.callsign != "XX1AB"]
+    selection = select(the_fleet.radios["chirp"], upstream, with_listen_power(own, watts("2.4")))
+    assert [c.power for c in selection.channels] == ["2.4W"] + ["5W"] * (len(selection.channels) - 1)
+    assert selection.power_notes == ()
 
 
-@pytest.mark.parametrize(("renderer", "fixed"), [("chirp", "5W"), ("hytera", "Middle"), ("jayt", "LOW2")])
-def test_a_power_that_is_not_a_level_refuses_a_channel_with_its_own_level(
+@pytest.mark.parametrize(("renderer", "fixed"), [("hytera", "Middle"), ("jayt", "LOW2")])
+def test_a_power_that_is_a_radio_value_refuses_a_channel_with_its_own_power(
     tmp_path: Path, renderer: str, fixed: str
 ) -> None:
     the_fleet, own = step(
@@ -409,7 +467,7 @@ def test_a_power_that_is_not_a_level_refuses_a_channel_with_its_own_level(
     with pytest.raises(
         ConfigError,
         match=rf"radios\.chirp\.power: '{fixed}' is the power of every channel, but channel 'XX1AB' from "
-        r"synthetic-db sets the level Low; make power a level",
+        r"synthetic-db sets the power Low; make power a level or watts",
     ):
         select(the_fleet.radios["chirp"], STEP_UPSTREAM, own)
 
@@ -426,12 +484,45 @@ def test_a_power_that_is_not_a_level_refuses_a_channel_with_its_own_level(
             r"radios\.qdmr\.power_levels\.Top: power levels are Max",
         ),
         (
-            ("power: High\n    power_levels: {High: Mid}", "power: Mid\n    power_levels: {High: 5W}"),
+            ("power_levels: {High: Mid}", "power_levels: {High: Turbo}"),
             r"radios\.qdmr\.power_levels\.High: the qdmr renderer takes the power as Max",
         ),
         (
-            ("power: High\n    power_levels: {High: 5W, Low: 1W}", "power: 5W\n    power_levels: {Low: 1W}"),
-            r"radios\.chirp\.power: with power_levels, power is a level",
+            ("power_levels: {High: 5W, Low: 1W}", "power_levels: {Low: 1W}"),
+            r"radios\.chirp\.power: no value for the power High in power_levels",
+        ),
+        (
+            ("renderer: chirp", "renderer: jayt"),
+            r"radios\.chirp\.power_levels\.High: the jayt renderer takes the power as LOW, LOW2, LOW3 or HIGH, "
+            r"not '5W'",
+        ),
+        (
+            ("power: High\n    power_levels: {High: 5W, Low: 1W}", "power: Middle\n    power_levels: {Low: 1W}"),
+            r"radios\.chirp\.power: power is a level \(Max, High, Mid, Low, Min\) or watts",
+        ),
+        (
+            ("{High: 5W, Low: 1W}", "{High: 5W, Low: 1W}\n    power_range: {min: 1W, max: 10W, step: 1W}"),
+            r"radios\.chirp\.power_range: the chirp renderer writes no stepped power range yet",
+        ),
+        (
+            ("{High: 5W, Low: 1W}", "{High: 5.5W}\n    power_range: {min: 1W, max: 10W, step: 1W}"),
+            r"radios\.chirp\.power_levels\.High: 5\.5W is not a step of power_range",
+        ),
+        (
+            ("{High: 5W, Low: 1W}", "{High: HIGH}\n    power_range: {min: 1W, max: 10W, step: 1W}"),
+            r"radios\.chirp\.power_levels\.High: the chirp renderer takes the power as watts, not 'HIGH'",
+        ),
+        (
+            ("{High: 5W, Low: 1W}", "{High: 5W}\n    power_range: {min: 1W, max: 10W, step: 2W}"),
+            r"radios\.chirp\.power_range\.max: 10W is not 1W plus whole steps of 2W",
+        ),
+        (
+            ("{High: 5W, Low: 1W}", "{High: 5W}\n    power_range: {min: 5W, max: 1W, step: 1W}"),
+            r"radios\.chirp\.power_range: expected min below max and a step above 0W",
+        ),
+        (
+            ("{High: 5W, Low: 1W}", "{High: 5W}\n    power_range: {min: 1W, max: High, step: 1W}"),
+            r"radios\.chirp\.power_range\.max: expected watts, such as 5W, not 'High'",
         ),
         (("renderer: chirp", "renderer: ft5d"), r"radios\.chirp\.power_levels: the ft5d renderer writes no power"),
         (

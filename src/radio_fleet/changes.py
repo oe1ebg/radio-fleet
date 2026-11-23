@@ -69,6 +69,7 @@ def _section(radio: Radio, build: BuildRecord | None, applied: Applied | None) -
     lines += _list("Drops", [f"{drop.name}: {drop.reason}" for drop in build.drops])
     lines += _list("Overrides", list(build.overrides))
     lines += _list("Overrides that match nothing", list(build.unmatched_overrides))
+    lines += _list("Power set to the nearest value", list(build.power_notes))
     return "\n".join([*lines, ""])
 
 

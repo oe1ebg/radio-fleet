@@ -8,8 +8,9 @@ from dataclasses import dataclass, replace
 
 from radio_fleet import geo
 from radio_fleet.config import ConfigError
-from radio_fleet.fleet import POWER_RENDERERS, RX_ONLY_RENDERERS, Capability, DistanceRegion, GroupRule, Radio, Region
-from radio_fleet.model import Channel, Power
+from radio_fleet.fleet import RX_ONLY_RENDERERS, Capability, DistanceRegion, GroupRule, Radio, Region
+from radio_fleet.model import Channel, Power, Watts
+from radio_fleet.power import PowerError
 from radio_fleet.sources import AppliedOverride, Override, Sources, TemplateChannel, apply_overrides, expand_dmr
 
 
@@ -41,6 +42,8 @@ class Selection:
     overrides: tuple[AppliedOverride, ...]
     unmatched_overrides: tuple[Override, ...] = ()
     """The overrides for this radio that match no upstream channel, in or outside its region."""
+    power_notes: tuple[str, ...] = ()
+    """Each power in watts that the radio sets to another value, such as `XX1AA: 25W -> Max (5W)`."""
 
 
 def select(radio: Radio, upstream: Sequence[Channel], sources: Sources) -> Selection:
@@ -76,6 +79,7 @@ def select(radio: Radio, upstream: Sequence[Channel], sources: Sources) -> Selec
     own = [channel for name in radio.own_lists for channel in sources.own_lists[name].channels]
 
     kept: list[Channel] = []
+    notes = _default_power_note(radio)
     for channel in [*own, *regional]:
         reason = _unfit(radio, channel)
         if reason is None and len(kept) == capability.channels:
@@ -83,12 +87,14 @@ def select(radio: Radio, upstream: Sequence[Channel], sources: Sources) -> Selec
         if reason:
             drops.append(Drop(channel.name, reason))
         else:
-            kept.append(_fitted(radio, channel))
+            fitted, note = _fitted(radio, channel)
+            kept.append(fitted)
+            notes += [f"{channel.name}: {note}"] if note else []
     zones = _groups("zone", radio.zones, capability.zones, capability.zone_channels, capability, kept, drops)
     scan_lists = _groups(
         "scan list", radio.scan_lists, capability.scan_lists, capability.scan_list_channels, capability, kept, drops
     )
-    return Selection(radio, tuple(kept), zones, scan_lists, tuple(drops), tuple(applied), unmatched)
+    return Selection(radio, tuple(kept), zones, scan_lists, tuple(drops), tuple(applied), unmatched, tuple(notes))
 
 
 def _outside(region: Region, channel: Channel) -> str | None:
@@ -126,28 +132,52 @@ def _unfit(radio: Radio, channel: Channel) -> str | None:
     return None
 
 
-def _fitted(radio: Radio, channel: Channel) -> Channel:
-    """The channel as the radio holds it: its name rewritten and cut, its power level (or the profile's when
-    it has none) as the radio's value, and a receive-only channel's TX frequency at its RX frequency."""
+def _fitted(radio: Radio, channel: Channel) -> tuple[Channel, str | None]:
+    """The channel as the radio holds it: its name rewritten and cut, its power (or the profile's when it has
+    none) as the radio's value, and a receive-only channel's TX frequency at its RX frequency. The note tells
+    how the radio's value differs from the channel's own watts."""
     name = channel.name
     for old, new in radio.name_replacements:
         name = name.replace(old, new)
     name = name[: radio.capability.name_length].rstrip()
-    if channel.power is not None and radio.fixed_power is not None:
-        raise ConfigError(
-            f"radios.{radio.id}.power: {radio.fixed_power!r} is the power of every channel, but channel "
-            f"{channel.name!r} from {channel.source} sets the level {channel.power}; make power a level and map "
-            "the levels in power_levels"
-        )
-    level = Power(channel.power) if channel.power is not None else radio.power
-    power = radio.power_value(level)
-    if level is not None and power is None and radio.renderer in POWER_RENDERERS:
-        raise ConfigError(
-            f"radios.{radio.id}.power_levels: no value for the power {level} of channel {channel.name!r} "
-            f"from {channel.source}"
-        )
+    power, note = _power(radio, channel)
     tx_hz = channel.rx_hz if channel.rx_only else channel.tx_hz
-    return replace(channel, name=name, power=power, tx_hz=tx_hz)
+    return replace(channel, name=name, power=power, tx_hz=tx_hz), note
+
+
+def _power(radio: Radio, channel: Channel) -> tuple[str | None, str | None]:
+    profile, own = radio.power, channel.power
+    if own is not None and not isinstance(own, Power | Watts):
+        raise AssertionError(f"channel {channel.name!r} holds the radio value {own!r} already")
+    if profile is None:
+        return None, None
+    if profile.fixed is not None:
+        if own is not None:
+            raise ConfigError(
+                f"radios.{radio.id}.power: {profile.fixed!r} is the power of every channel, but channel "
+                f"{channel.name!r} from {channel.source} sets the power {own}; make power a level or watts and "
+                "map the levels in power_levels"
+            )
+        return profile.fixed, None
+    request = own if own is not None else profile.default
+    if request is None:
+        return None, None
+    try:
+        resolved = profile.resolve(request)
+    except PowerError as error:
+        raise ConfigError(
+            f"radios.{radio.id}.power_levels: {error} of channel {channel.name!r} from {channel.source}"
+        ) from None
+    return resolved.value, resolved.note if own is not None else None
+
+
+def _default_power_note(radio: Radio) -> list[str]:
+    """The profile's own `power` is reported once, not for every channel that takes it."""
+    profile = radio.power
+    if profile is None or profile.default is None or profile.fixed is not None:
+        return []
+    note = profile.resolve(profile.default).note
+    return [f"power of the profile: {note}"] if note else []
 
 
 def _groups(

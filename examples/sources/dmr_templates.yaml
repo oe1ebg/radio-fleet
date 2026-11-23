@@ -1,6 +1,7 @@
 # A profile's `dmr_template` turns each upstream DMR repeater into these channels, and its
 # `dmr_templates` names other templates for some callsigns or callsign prefixes. The channel
 # name is the upstream name followed by the entry's name, for example "XX1AA TS1 TG232".
+# An entry may set `power`, a level or watts; a power that an override sets wins.
 templates:
   standard:
     - {name: TS1 TG232, time_slot: 1, tx_talkgroup: TG232, rx_group_list: Austria}

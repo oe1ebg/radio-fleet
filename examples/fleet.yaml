@@ -23,10 +23,13 @@
 #   the radio cannot transmit; the other renderers drop them.
 # dmr_template: the template of every upstream DMR repeater; dmr_templates names
 #   other templates by callsign or callsign prefix (the longest one wins).
-# power: the level (Max, High, Mid, Low, Min) of a channel that sets none;
-#   power_levels maps the levels to the radio's values: watts for chirp; LOW, LOW2,
-#   LOW3 or HIGH for jayt. qdmr takes the levels as they are, and Hytera maps them to
-#   High, Middle and Low unless power_levels says otherwise.
+# power: the power of a channel that sets none, a level (Max, High, Mid, Low, Min) or
+#   watts (5W, 0.5W). power_levels maps the levels to watts, or to the radio's own
+#   values (LOW, LOW2, LOW3 or HIGH for jayt). Watts go to the nearest level that has
+#   watts, the lower one on a tie, and the build reports it, such as "25W -> Max (5W)".
+#   qdmr takes the levels as they are, Hytera maps them to High, Middle and Low, and
+#   chirp writes watts. power_range {min, max, step} describes a radio that sets watts
+#   in steps; no renderer writes it yet (the FTX-1 waits for jayt).
 # naming: upstream is the name of an upstream channel, from {callsign}, {band} (the
 #   capability band of its RX frequency) and {site} (the snapshot's name column);
 #   replace rewrites every name.

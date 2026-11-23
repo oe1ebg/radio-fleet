@@ -44,6 +44,7 @@ def test_a_before_and_after_pair_gives_the_expected_report(tmp_path: Path) -> No
         (Drop("XX1FA", "TX 435.00000 MHz outside the TX bands"),),
         (AppliedOverride("XX1AA", Mode.FM, "2m", override),),
         (stale,),
+        ("XX1TW: 2.4W -> Mid (2W)",),
     )
     build = tmp_path / "build"
     record.write_build(selection, build / "uv5r-mini")
@@ -86,6 +87,10 @@ def test_a_before_and_after_pair_gives_the_expected_report(tmp_path: Path) -> No
         "### Overrides that match nothing (1)\n"
         "\n"
         "- XX1GO FM 70cm: tone_tx=- (the repeater lost its tone)\n"
+        "\n"
+        "### Power set to the nearest value (1)\n"
+        "\n"
+        "- XX1TW: 2.4W -> Mid (2W)\n"
     )
 
 
@@ -104,7 +109,8 @@ def test_the_first_build_compares_against_nothing_and_an_unbuilt_radio_says_so(t
         "### Changed (0)\n\nNone.\n\n"
         "### Drops (0)\n\nNone.\n\n"
         "### Overrides (0)\n\nNone.\n\n"
-        "### Overrides that match nothing (0)\n\nNone.\n",
+        "### Overrides that match nothing (0)\n\nNone.\n\n"
+        "### Power set to the nearest value (0)\n\nNone.\n",
         "hm785: Hytera HM785 (hytera)\n\nNot built.\n",
     ]
 

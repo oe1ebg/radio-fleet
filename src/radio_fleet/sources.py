@@ -12,9 +12,10 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, TypedDict
 
-from radio_fleet import config
+from radio_fleet import config, power
 from radio_fleet.config import Node
 from radio_fleet.model import Channel, Ctcss, Dcs, Mode, Power, Tone
+from radio_fleet.power import Request
 
 MHZ, KHZ = 1_000_000, 1_000
 
@@ -61,7 +62,7 @@ class ChannelFields(TypedDict, total=False):
     time_slot: int
     tx_talkgroup: str
     rx_group_list: str
-    power: Power
+    power: Request
     tags: tuple[str, ...]
     rx_only: bool
 
@@ -113,6 +114,7 @@ class TemplateChannel:
     time_slot: int
     tx_talkgroup: str
     rx_group_list: str | None
+    power: Request | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,7 +173,8 @@ def expand_dmr(
     channels: Iterable[Channel], template_of: Callable[[Channel], Sequence[TemplateChannel] | None]
 ) -> list[Channel]:
     """Replace each DMR channel by one channel per entry of its template. A channel without a template, a
-    channel that has a talkgroup already (from an override) and the channels of other modes pass unchanged."""
+    channel that has a talkgroup already (from an override) and the channels of other modes pass unchanged.
+    A power from an override wins over the template's."""
     result: list[Channel] = []
     for channel in channels:
         template = template_of(channel) if channel.mode is Mode.DMR and channel.tx_talkgroup is None else None
@@ -185,6 +188,7 @@ def expand_dmr(
                 time_slot=entry.time_slot,
                 tx_talkgroup=entry.tx_talkgroup,
                 rx_group_list=entry.rx_group_list,
+                power=channel.power if channel.power is not None else entry.power,
             )
             for entry in template
         )
@@ -295,12 +299,13 @@ def _dmr_templates(root: Node, names: _Names) -> dict[str, tuple[TemplateChannel
 
 
 def _template_channel(node: Node, names: _Names) -> TemplateChannel:
-    fields = node.fields(["name", "time_slot", "tx_talkgroup"], ["rx_group_list"])
+    fields = node.fields(["name", "time_slot", "tx_talkgroup"], ["rx_group_list", "power"])
     return TemplateChannel(
         name=fields["name"].text(),
         time_slot=fields["time_slot"].integer(1, 2),
         tx_talkgroup=names.talkgroup(fields["tx_talkgroup"]),
         rx_group_list=names.rx_group_list(fields["rx_group_list"]) if "rx_group_list" in fields else None,
+        power=_power(fields["power"]) if "power" in fields else None,
     )
 
 
@@ -350,13 +355,11 @@ def _mode(node: Node) -> Mode:
         raise node.error(f"mode must be one of {', '.join(Mode)}") from None
 
 
-def _power(node: Node) -> Power:
-    try:
-        return Power(node.text())
-    except ValueError:
-        raise node.error(
-            f"power is a level: {', '.join(Power)}; the radio profile maps it to the radio's value"
-        ) from None
+def _power(node: Node) -> Request:
+    request = power.parse(node.value if isinstance(node.value, str) else "")
+    if request is None:
+        raise node.error(f"power is a level ({', '.join(Power)}) or watts, such as 5W, not {node.value!r}")
+    return request
 
 
 def _tone(node: Node) -> Tone:
