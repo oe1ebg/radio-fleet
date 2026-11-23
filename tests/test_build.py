@@ -1,3 +1,4 @@
+import csv
 import shutil
 from pathlib import Path
 
@@ -53,6 +54,15 @@ def test_a_failing_check_fails_the_build_names_the_radio_and_removes_its_output(
     )
     assert check.calls[0][0] == "d168uv"
     assert not output_of(data, "d168uv").exists()
+
+
+def test_a_chirp_profile_step_and_scan_lists_reach_tstep_and_skip(data: Path) -> None:
+    assert main(["build", "--data", str(data), "--radio", "uv9r-pro"], dmrconf=FakeDmrconf()) == 0
+    with (data / "build" / "uv9r-pro" / "uv9r-pro.csv").open(encoding="utf-8", newline="") as csv_file:
+        rows = {row["Name"]: (row["TStep"], row["Skip"]) for row in csv.DictReader(csv_file)}
+    assert rows["2m Call"] == ("5.00", "S")
+    assert rows["XX1AA"] == ("5.00", "")
+    assert rows["XX3DD"] == ("12.50", "")
 
 
 @pytest.mark.parametrize(
