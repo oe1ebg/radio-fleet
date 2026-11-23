@@ -17,12 +17,12 @@ class PublishError(RuntimeError):
     pass
 
 
-def publish(build: Path, equipment: Path, radio_id: str, today: date) -> Path:
-    """Copy the radio's build to `<equipment>/<radio>/generated/<date>/`; an existing target is refused."""
+def publish(build: Path, equipment: Path, folder: Path, radio_id: str, today: date) -> Path:
+    """Copy the radio's build to `<equipment>/<folder>/generated/<date>/`; an existing target is refused."""
     _require_build(build, radio_id)
     if not equipment.is_dir():
         raise PublishError(f"no equipment directory {equipment}")
-    target = equipment / radio_id / "generated" / today.isoformat()
+    target = equipment / folder / "generated" / today.isoformat()
     target.parent.mkdir(parents=True, exist_ok=True)
     try:
         target.mkdir()

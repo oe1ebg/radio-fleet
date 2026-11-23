@@ -70,6 +70,10 @@ def test_the_data_root_comes_from_data_else_fleet_data_else_the_current_director
     assert output(capsys, ["select", "--radio", "d878uv2plus"]) == in_root
     monkeypatch.setenv("FLEET_DATA", str(tmp_path))
     assert output(capsys, ["select", "--data", str(EXAMPLES), "--radio", "d878uv2plus"]) == in_root
+    assert output(capsys, ["--data", str(EXAMPLES), "select", "--radio", "d878uv2plus"]) == in_root
+    assert output(capsys, ["--data", str(tmp_path), "select", "--data", str(EXAMPLES), "--radio", "d878uv2plus"]) == (
+        in_root
+    )
 
 
 def test_an_own_list_that_is_named_but_missing_fails_with_its_file_name(

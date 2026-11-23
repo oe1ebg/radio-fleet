@@ -14,7 +14,7 @@ from typing import Any, TypedDict
 
 from radio_fleet import config, power
 from radio_fleet.config import Node
-from radio_fleet.model import Channel, Ctcss, Dcs, Mode, Power, Tone
+from radio_fleet.model import TUNING_STEPS_HZ, Channel, Ctcss, Dcs, Mode, Power, Tone
 from radio_fleet.power import Request
 
 MHZ, KHZ = 1_000_000, 1_000
@@ -34,6 +34,9 @@ _CHANNEL_KEYS = (
     "power",
     "tags",
     "rx_only",
+    "step",
+    "skip",
+    "note",
 )
 # The keys an override can clear, and the channel field each one names.
 _CLEARABLE = {
@@ -46,6 +49,9 @@ _CLEARABLE = {
     "rx_group_list": "rx_group_list",
     "power": "power",
     "tags": "tags",
+    "step": "step_hz",
+    "skip": "skip",
+    "note": "note",
 }
 _DEFAULTS: dict[str, Any] = {field.name: field.default for field in dataclasses.fields(Channel)}
 
@@ -65,6 +71,9 @@ class ChannelFields(TypedDict, total=False):
     power: Request
     tags: tuple[str, ...]
     rx_only: bool
+    step_hz: int
+    skip: bool
+    note: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -340,12 +349,31 @@ def _channel_fields(fields: Mapping[str, Node], names: _Names) -> ChannelFields:
             case "tags":
                 values["tags"] = node.texts()
             case "rx_only":
-                if not isinstance(node.value, bool):
-                    raise node.error("expected true or false")
-                values["rx_only"] = node.value
+                values["rx_only"] = _bool(node)
+            case "step":
+                values["step_hz"] = tuning_step(node)
+            case "skip":
+                values["skip"] = _bool(node)
+            case "note":
+                values["note"] = node.text()
             case _:
                 raise AssertionError(f"channel key {key!r} has no reader")
     return values
+
+
+def _bool(node: Node) -> bool:
+    if not isinstance(node.value, bool):
+        raise node.error("expected true or false")
+    return node.value
+
+
+def tuning_step(node: Node) -> int:
+    """A tuning step in kHz that CHIRP knows, as Hz."""
+    step = node.hz(KHZ)
+    if step not in TUNING_STEPS_HZ:
+        steps = ", ".join(f"{hz / KHZ:g}" for hz in TUNING_STEPS_HZ)
+        raise node.error(f"a tuning step is one of {steps} kHz")
+    return step
 
 
 def _mode(node: Node) -> Mode:

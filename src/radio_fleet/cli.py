@@ -31,22 +31,24 @@ def main(
         prog="fleet", description="Build CPS files for every radio from one channel source."
     )
     parser.add_argument("--version", action="version", version=f"fleet {__version__}")
-    common = argparse.ArgumentParser(add_help=False)
-    common.add_argument(
-        "--data",
-        type=Path,
-        help="data root: fleet.yaml, sources/, snapshots/, bases/, applied.yaml, build/"
-        " (default: $FLEET_DATA, else the current directory)",
+    data_help = (
+        "data root: fleet.yaml, sources/, snapshots/, bases/, applied.yaml, build/"
+        " (default: $FLEET_DATA, else the current directory)"
     )
+    parser.add_argument("--data", type=Path, help=data_help)
+    common = argparse.ArgumentParser(add_help=False)
+    # SUPPRESS keeps a --data given before the command when the command's own --data is not given.
+    common.add_argument("--data", type=Path, default=argparse.SUPPRESS, help=data_help)
     common.add_argument("--fleet", type=Path, help="fleet file (default: DATA/fleet.yaml)")
-    common.add_argument("--snapshots", type=Path, help="snapshot directory (default: DATA/snapshots)")
+    with_snapshots = argparse.ArgumentParser(add_help=False)
+    with_snapshots.add_argument("--snapshots", type=Path, help="snapshot directory (default: DATA/snapshots)")
     with_sources = argparse.ArgumentParser(add_help=False)
     with_sources.add_argument("--radio", required=True, help="radio id in the fleet file")
     with_sources.add_argument("--sources", type=Path, help="own lists, overrides, templates (default: DATA/sources)")
     commands = parser.add_subparsers(dest="command")
 
     fetch = commands.add_parser(
-        "fetch", parents=[common], help="snapshot the upstream sources to snapshots/<source>.csv"
+        "fetch", parents=[common, with_snapshots], help="snapshot the upstream sources to snapshots/<source>.csv"
     )
     fetch.add_argument(
         "--source",
@@ -58,15 +60,17 @@ def main(
     fetch.add_argument("--offline", action="store_true", help="read the existing snapshots instead of the network")
 
     commands.add_parser(
-        "select", parents=[common, with_sources], help="print the channels, zones, scan lists and drops of one radio"
+        "select",
+        parents=[common, with_snapshots, with_sources],
+        help="print the channels, zones, scan lists and drops of one radio",
     )
     commands.add_parser(
         "build",
-        parents=[common, with_sources],
+        parents=[common, with_snapshots, with_sources],
         help="render one radio's file to build/<radio>/, check it with the radio's tool and update build/CHANGES.md",
     )
     commands.add_parser(
-        "publish", parents=[common], help="copy build/<radio>/ to <equipment>/<radio>/generated/<date>/"
+        "publish", parents=[common], help="copy build/<radio>/ to <equipment>/<equipment_dir>/generated/<date>/"
     ).add_argument("radio", help="radio id in the fleet file")
     commands.add_parser(
         "applied",
@@ -80,14 +84,16 @@ def main(
         return 0
     data_root = args.data or Path(os.environ.get("FLEET_DATA") or ".")
     fleet_file = args.fleet or data_root / "fleet.yaml"
-    snapshots_dir = args.snapshots or data_root / "snapshots"
     try:
+        if args.command in ("publish", "applied"):
+            return _record(
+                args.command, fleet.load(fleet_file, data_root), data_root, args.radio, today or date.today()
+            )
+        snapshots_dir = args.snapshots or data_root / "snapshots"
         if args.command == "fetch":
             names = args.sources or list(fleet.load(fleet_file, data_root).sources)
             return _fetch(names, snapshots_dir, args.offline, fetcher or McpCli())
         the_fleet = fleet.load(fleet_file, data_root)
-        if args.command in ("publish", "applied"):
-            return _record(args.command, the_fleet, data_root, args.radio, today or date.today())
         selection, own = _selection(the_fleet, args.sources or data_root / "sources", snapshots_dir, args.radio)
         if args.command == "select":
             _print(selection)
@@ -152,12 +158,12 @@ def _write_changes(the_fleet: fleet.Fleet, build_dir: Path, applied_file: Path) 
 
 
 def _record(command: str, the_fleet: fleet.Fleet, data_root: Path, radio_id: str, today: date) -> int:
-    _radio(the_fleet, radio_id)
+    radio = _radio(the_fleet, radio_id)
     build_dir = data_root / "build"
     if command == "publish":
         if the_fleet.equipment is None:
             raise ConfigError(f"{the_fleet.file}: `fleet publish` needs the equipment directory: equipment: DIR")
-        target = publish.publish(build_dir / radio_id, the_fleet.equipment, radio_id, today)
+        target = publish.publish(build_dir / radio_id, the_fleet.equipment, radio.equipment_dir, radio_id, today)
         print(f"{radio_id}: {target}")
         return 0
     applied_file = data_root / "applied.yaml"

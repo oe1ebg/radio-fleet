@@ -71,6 +71,32 @@ def test_a_power_the_profile_cannot_resolve_fails_with_the_profile(
     assert capsys.readouterr().err == f"fleet build: {fleet_file}: radios.d878uv2plus.power: {message}\n"
 
 
+@pytest.mark.parametrize(
+    ("file", "change", "origin"),
+    [
+        ("sources/own/simplex.yaml", ("rx: 145.500, mode: FM}", "rx: 145.500, mode: FM, power: 5W}"), "the own list"),
+        (
+            "sources/overrides.yaml",
+            ("overrides: []", "overrides: [{callsign: XX1AA, reason: synthetic, set: {power: 5W}}]"),
+            "the override",
+        ),
+    ],
+)
+def test_a_channel_power_the_qdmr_profile_cannot_resolve_names_the_profile_and_the_source(
+    data: Path, file: str, change: tuple[str, str], origin: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = data / file
+    assert change[0] in path.read_text()
+    path.write_text(path.read_text().replace(*change))
+    assert main(["build", "--data", str(data), "--radio", "d878uv2plus"], dmrconf=FakeDmrconf()) == 1
+    error = capsys.readouterr().err
+    assert error.startswith(
+        f"fleet build: {data / 'fleet.yaml'}: radios.d878uv2plus.power_levels: no level with watts for the power 5W"
+    )
+    assert f"from {origin} {path}" in error
+    assert "bases/" not in error
+
+
 @pytest.mark.parametrize("key", ["base: bases/qdmr/d878uv2plus.yaml", "dmrconf_radio: d878uv2"])
 def test_a_qdmr_radio_without_a_base_or_dmrconf_radio_fails_the_build(
     data: Path, key: str, capsys: pytest.CaptureFixture[str]

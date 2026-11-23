@@ -171,6 +171,9 @@ EVERY_KEY = {
     "power": "Low",
     "tags": ["quiet"],
     "rx_only": False,
+    "step": 6.25,
+    "skip": True,
+    "note": "hilltop",
 }
 
 
@@ -193,6 +196,9 @@ def test_every_channel_key_is_read_into_its_field(tmp_path: Path) -> None:
         power=Power.LOW,
         tags=("quiet",),
         source="a",
+        step_hz=6_250,
+        skip=True,
+        note="hilltop",
     )
 
 
@@ -224,6 +230,11 @@ def test_every_channel_key_is_read_into_its_field(tmp_path: Path) -> None:
             r"channels\[0\]\.tx: a receive-only channel has no TX frequency",
         ),
         ({"dmr_templates.yaml": "templates: {t: [{name: A, time_slot: 3, tx_talkgroup: TG1}]}\n"}, "from 1 to 2"),
+        (
+            {"own/a.yaml": "name: a\nchannels: [{name: X, rx: 145.5, mode: FM, step: 7}]\n"},
+            r"channels\[0\]\.step: a tuning step is one of 1, 2\.5, 5, 6\.25, .*, 200 kHz",
+        ),
+        ({"own/a.yaml": "name: a\nchannels: [{name: X, rx: 145.5, mode: FM, skip: S}]\n"}, "expected true or false"),
     ],
 )
 def test_invalid_sources_are_refused_with_their_place(tmp_path: Path, files: dict[str, str], message: str) -> None:

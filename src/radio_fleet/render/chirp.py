@@ -4,6 +4,10 @@ Memories are numbered from 1 in the order of the selection. CHIRP reads the powe
 settings as its memory fields: `Tone` is the tone mode, `rToneFreq` the CTCSS tone sent with `Tone`,
 `cToneFreq` the CTCSS tone of `TSQL`, and `Cross` combines a TX and an RX tone as `CrossMode` names.
 A receive-only channel has the `Duplex` `off`, with which CHIRP's radios do not transmit.
+
+`TStep` is the channel's step, else the profile's when the frequency and offset are on it, else the coarsest
+CHIRP step they are on. `Skip` is the channel's; else, when the profile has scan-list rules, a channel that no
+scan list takes is skipped (`S`). `Comment` is the channel's note, else its site.
 """
 
 from __future__ import annotations
@@ -40,7 +44,8 @@ COLUMNS = (
     "RPT2CALL",
     "DVCODE",
 )
-# The CHIRP tuning steps a frequency and its offset are tried on, coarsest first.
+# The CHIRP tuning steps a frequency and its offset are tried on, coarsest first, when the profile's step
+# does not fit.
 STEPS_HZ = (12_500, 6_250, 5_000, 2_500)
 _DEFAULT_CTCSS = Ctcss(88.5)
 _DEFAULT_DCS = Dcs(23)
@@ -54,8 +59,11 @@ def render(selection: Selection) -> str:
     out = io.StringIO()
     writer = csv.writer(out, lineterminator="\n")
     writer.writerow(COLUMNS)
+    radio = selection.radio
+    scanned = {channel for group in selection.scan_lists for channel in group.channels}
     for number, channel in enumerate(dict.fromkeys(selection.channels), 1):
-        writer.writerow(_row(number, channel))
+        skip = channel.skip if channel.skip is not None else bool(radio.scan_lists) and channel not in scanned
+        writer.writerow(_row(number, channel, radio.step_hz, skip))
     return out.getvalue()
 
 
@@ -67,7 +75,7 @@ def check(text: str, capability: Capability) -> None:
     check_memories([row[1] for row in table[1:]], capability)
 
 
-def _row(number: int, channel: Channel) -> list[str]:
+def _row(number: int, channel: Channel, step_hz: int, skip: bool) -> list[str]:
     if channel.mode is not Mode.FM:
         raise RenderError(f"channel {channel.name}: the CHIRP renderer carries FM, not {channel.mode}")
     offset = channel.tx_hz - channel.rx_hz
@@ -81,10 +89,10 @@ def _row(number: int, channel: Channel) -> list[str]:
         mhz(abs(offset)),
         *_tones(channel.tone_tx, channel.tone_rx),
         "NFM" if narrow else "FM",
-        _step(channel, abs(offset)),
-        "",
+        _step(channel, abs(offset), step_hz),
+        "S" if skip else "",
         _power(channel),
-        channel.source,
+        channel.note or channel.site or "",
         "",
         "",
         "",
@@ -122,11 +130,25 @@ def _kind(tone: Tone | None) -> str:
     return "" if tone is None else "Tone" if isinstance(tone, Ctcss) else "DTCS"
 
 
-def _step(channel: Channel, offset: int) -> str:
-    for step in STEPS_HZ:
-        if channel.rx_hz % step == 0 and offset % step == 0:
-            return f"{step / 1000:.2f}"
+def _step(channel: Channel, offset: int, profile_step: int) -> str:
+    def fits(step: int) -> bool:
+        return channel.rx_hz % step == 0 and offset % step == 0
+
+    if channel.step_hz is not None:
+        if not fits(channel.step_hz):
+            raise RenderError(
+                f"channel {channel.name}: RX {mhz(channel.rx_hz)} MHz or its offset is not on its step "
+                f"{channel.step_hz / 1000:g} kHz"
+            )
+        return _khz(channel.step_hz)
+    for step in (profile_step, *STEPS_HZ):
+        if fits(step):
+            return _khz(step)
     raise RenderError(f"channel {channel.name}: RX {mhz(channel.rx_hz)} MHz is on no CHIRP tuning step")
+
+
+def _khz(hz: int) -> str:
+    return f"{hz / 1000:.2f}"
 
 
 def _power(channel: Channel) -> str:

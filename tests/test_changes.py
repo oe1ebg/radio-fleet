@@ -181,7 +181,8 @@ def test_every_channel_field_a_radio_holds_is_recorded_and_compared() -> None:
     full = Channel(
         "XX1FU", 438_000_000, 430_400_000, Mode.DMR, Ctcss(67.0), Dcs(23), 12_500, 1, 2, "TG 232", "Austria", "1W"
     )
-    assert list(record.channel_record(replace(full, rx_only=True))) == ["name", *record.FIELDS]
+    held = replace(full, rx_only=True, step_hz=5_000, skip=False, note="hill")
+    assert list(record.channel_record(held)) == ["name", *record.FIELDS]
     others: dict[str, Any] = {
         "name": "XX1FV",
         "rx_hz": 438_100_000,
@@ -196,6 +197,9 @@ def test_every_channel_field_a_radio_holds_is_recorded_and_compared() -> None:
         "rx_group_list": "Local",
         "power": "5W",
         "rx_only": True,
+        "step_hz": 6_250,
+        "skip": True,
+        "note": "tower",
     }
     not_held = {"tags", "source", "position", "callsign", "site"}
     assert {field.name for field in fields(Channel)} == set(others) | not_held

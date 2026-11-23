@@ -8,11 +8,11 @@ import pytest
 
 from radio_fleet import fleet
 from radio_fleet.cli import main
-from radio_fleet.fleet import PrefixRegion, Radio, Region
+from radio_fleet.fleet import GroupRule, PrefixRegion, Radio, Region
 from radio_fleet.model import Channel, Ctcss, Dcs, Mode, Tone
 from radio_fleet.render import chirp
 from radio_fleet.render.csvcheck import CsvCheckError
-from radio_fleet.selection import Drop, Selection, select
+from radio_fleet.selection import Drop, Group, Selection, select
 from radio_fleet.sources import Sources
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
@@ -54,11 +54,11 @@ def test_repeater_simplex_ctcss_and_dcs_channels_give_the_expected_rows() -> Non
         fm("XX0DC", 433_600_000, 433_600_000, tone_tx=Dcs(23), tone_rx=Dcs(23), power="2W"),
         fm("XX0MI", 431_037_500, 438_637_500),
     ) == [
-        "1,XX0SX,145.500000,,0.000000,,88.5,88.5,023,NN,023,Tone->Tone,FM,12.50,,5.0W,synthetic,,,,",
-        "2,XX0RP,145.612500,-,0.600000,Tone,88.5,88.5,023,NN,023,Tone->Tone,NFM,12.50,,5.0W,synthetic,,,,",
-        "3,XX0UP,438.962500,-,7.600000,TSQL,123.0,123.0,023,NN,023,Tone->Tone,FM,12.50,,0.5W,synthetic,,,,",
-        "4,XX0DC,433.600000,,0.000000,DTCS,88.5,88.5,023,NN,023,Tone->Tone,FM,12.50,,2.0W,synthetic,,,,",
-        "5,XX0MI,431.037500,+,7.600000,,88.5,88.5,023,NN,023,Tone->Tone,FM,12.50,,5.0W,synthetic,,,,",
+        "1,XX0SX,145.500000,,0.000000,,88.5,88.5,023,NN,023,Tone->Tone,FM,12.50,,5.0W,,,,,",
+        "2,XX0RP,145.612500,-,0.600000,Tone,88.5,88.5,023,NN,023,Tone->Tone,NFM,12.50,,5.0W,,,,,",
+        "3,XX0UP,438.962500,-,7.600000,TSQL,123.0,123.0,023,NN,023,Tone->Tone,FM,12.50,,0.5W,,,,,",
+        "4,XX0DC,433.600000,,0.000000,DTCS,88.5,88.5,023,NN,023,Tone->Tone,FM,12.50,,2.0W,,,,,",
+        "5,XX0MI,431.037500,+,7.600000,,88.5,88.5,023,NN,023,Tone->Tone,FM,12.50,,5.0W,,,,,",
     ]
 
 
@@ -76,7 +76,58 @@ def test_repeater_simplex_ctcss_and_dcs_channels_give_the_expected_rows() -> Non
 )
 def test_different_tx_and_rx_tones_give_a_cross_mode(tx: Tone | None, rx: Tone | None, columns: str) -> None:
     (row,) = render(fm("XX0CR", 145_500_000, 145_500_000, tone_tx=tx, tone_rx=rx))
-    assert row == f"1,XX0CR,145.500000,,0.000000,{columns},FM,12.50,,5.0W,synthetic,,,,"
+    assert row == f"1,XX0CR,145.500000,,0.000000,{columns},FM,12.50,,5.0W,,,,,"
+
+
+def test_a_profile_step_of_5_khz_and_a_skipped_channel_give_the_expected_tstep_and_skip() -> None:
+    stepped = replace(radio(), step_hz=5_000)
+    channels = (
+        fm("XX0FV", 145_525_000, 145_525_000),
+        replace(fm("XX0SK", 145_550_000, 145_550_000), skip=True),
+        fm("XX0SX", 446_006_250, 446_006_250),
+        replace(fm("XX0TW", 145_600_000, 145_000_000), step_hz=25_000),
+    )
+    rows = list(csv.reader(io.StringIO(chirp.render(Selection(stepped, channels, (), (), (), ())))))[1:]
+    assert [(row[1], row[13], row[14]) for row in rows] == [
+        ("XX0FV", "5.00", ""),
+        ("XX0SK", "5.00", "S"),
+        ("XX0SX", "6.25", ""),
+        ("XX0TW", "25.00", ""),
+    ]
+
+
+def test_with_scan_list_rules_a_channel_no_scan_list_takes_is_skipped_unless_it_says_otherwise() -> None:
+    scanning = replace(radio(), scan_lists=(GroupRule("Repeaters", channels=("XX0R*",)),))
+    channels = (
+        fm("XX0RA", 145_600_000, 145_000_000),
+        fm("XX0SX", 145_500_000, 145_500_000),
+        replace(fm("XX0SY", 145_525_000, 145_525_000), skip=False),
+        replace(fm("XX0RB", 145_625_000, 145_025_000), skip=True),
+    )
+    scan = Group("Repeaters", (channels[0], channels[3]))
+    text = chirp.render(Selection(scanning, channels, (), (scan,), (), ()))
+    assert [(row[1], row[14]) for row in list(csv.reader(io.StringIO(text)))[1:]] == [
+        ("XX0RA", ""),
+        ("XX0SX", "S"),
+        ("XX0SY", ""),
+        ("XX0RB", "S"),
+    ]
+
+
+def test_the_comment_is_the_note_else_the_site_and_never_the_source() -> None:
+    channels = (
+        replace(fm("XX0NT", 145_500_000, 145_500_000), site="Synthetic Hill", note="calling channel"),
+        replace(fm("XX0ST", 145_600_000, 145_000_000), site="Synthetic Hill"),
+        fm("XX0NO", 145_525_000, 145_525_000),
+    )
+    assert [row.split(",")[16] for row in render(*channels)] == ["calling channel", "Synthetic Hill", ""]
+
+
+def test_a_channel_off_its_own_step_is_refused() -> None:
+    with pytest.raises(
+        chirp.RenderError, match=r"XX0OF: RX 145\.506250 MHz or its offset is not on its step 12\.5 kHz"
+    ):
+        render(replace(fm("XX0OF", 145_506_250, 145_506_250), step_hz=12_500))
 
 
 def test_a_channel_listed_twice_is_one_memory() -> None:
@@ -115,7 +166,7 @@ def test_a_channel_chirp_cannot_carry_is_refused(channel: Channel, message: str)
         render(channel)
 
 
-ROW = "1,XX0SX,145.500000,,0.000000,,88.5,88.5,023,NN,023,Tone->Tone,FM,12.50,,5.0W,synthetic,,,,"
+ROW = "1,XX0SX,145.500000,,0.000000,,88.5,88.5,023,NN,023,Tone->Tone,FM,12.50,,5.0W,,,,,"
 
 
 @pytest.mark.parametrize(
@@ -140,7 +191,7 @@ def test_build_writes_the_checked_chirp_csv(tmp_path: Path, capsys: pytest.Captu
     output = data / "build" / "uv5r-mini" / "uv5r-mini.csv"
     assert capsys.readouterr().out == f"uv5r-mini: {output}\n"
     assert output.read_text(encoding="utf-8").splitlines()[1] == (
-        "1,2m Call,145.500000,,0.000000,,88.5,88.5,023,NN,023,Tone->Tone,FM,12.50,,5.0W,simplex,,,,"
+        "1,2m Call,145.500000,,0.000000,,88.5,88.5,023,NN,023,Tone->Tone,FM,12.50,,5.0W,,,,,"
     )
 
 

@@ -44,6 +44,23 @@ def test_publish_copies_the_build_to_the_dated_equipment_directory(
         assert path.read_bytes() == (build / path.name).read_bytes()
 
 
+def test_publish_copies_to_the_equipment_dir_of_the_profile(data: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    fleet_file = data / "fleet.yaml"
+    profile = "    renderer: chirp\n"
+    fleet_file.write_text(fleet_file.read_text().replace(profile, f"{profile}    equipment_dir: baofeng/mini\n", 1))
+    assert main(["--data", str(data), "publish", "uv5r-mini"], today=DAY) == 0
+    target = data / "equipment" / "baofeng" / "mini" / "generated" / "2026-05-06"
+    assert capsys.readouterr().out == f"uv5r-mini: {target}\n"
+    assert sorted(path.name for path in target.iterdir()) == ["selection.yaml", "uv5r-mini.csv"]
+    assert not (data / "equipment" / "uv5r-mini").exists()
+
+
+@pytest.mark.parametrize("command", ["publish", "applied"])
+def test_publish_and_applied_take_no_snapshot_directory(data: Path, command: str) -> None:
+    with pytest.raises(SystemExit):
+        run(data, command, "--snapshots", str(data / "snapshots"), "uv5r-mini")
+
+
 def test_publish_refuses_an_existing_target_and_leaves_it_unchanged(
     data: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

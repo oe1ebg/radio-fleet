@@ -9,9 +9,17 @@ from dataclasses import dataclass, replace
 from radio_fleet import geo
 from radio_fleet.config import ConfigError
 from radio_fleet.fleet import RX_ONLY_RENDERERS, Capability, DistanceRegion, GroupRule, Radio, Region
-from radio_fleet.model import Channel, Power, Watts
+from radio_fleet.model import Channel, Mode, Power, Watts
 from radio_fleet.power import PowerError
-from radio_fleet.sources import AppliedOverride, Override, Sources, TemplateChannel, apply_overrides, expand_dmr
+from radio_fleet.sources import (
+    AppliedOverride,
+    Override,
+    Sources,
+    TemplateChannel,
+    apply_overrides,
+    expand_dmr,
+    own_list_path,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,18 +84,23 @@ def select(radio: Radio, upstream: Sequence[Channel], sources: Sources) -> Selec
         return sources.dmr_templates[name] if name is not None else None
 
     regional = expand_dmr(regional, template_of)
-    own = [channel for name in radio.own_lists for channel in sources.own_lists[name].channels]
+    own = [
+        (channel, f"the own list {own_list_path(sources.directory, name)}")
+        for name in radio.own_lists
+        for channel in sources.own_lists[name].channels
+    ]
+    upstream_origins = [(channel, _power_origin(radio, channel, band_name(channel), applied)) for channel in regional]
 
     kept: list[Channel] = []
     notes = _default_power_note(radio)
-    for channel in [*own, *regional]:
+    for channel, origin in [*own, *upstream_origins]:
         reason = _unfit(radio, channel)
         if reason is None and len(kept) == capability.channels:
             reason = f"channel limit of {capability.channels} reached"
         if reason:
             drops.append(Drop(channel.name, reason))
         else:
-            fitted, note = _fitted(radio, channel)
+            fitted, note = _fitted(radio, channel, origin)
             kept.append(fitted)
             notes += [f"{channel.name}: {note}"] if note else []
     zones = _groups("zone", radio.zones, capability.zones, capability.zone_channels, capability, kept, drops)
@@ -117,6 +130,20 @@ def _upstream_named(radio: Radio, channel: Channel, band: str | None) -> Channel
     return replace(channel, name=" ".join(name.split()) or channel.name)
 
 
+def _power_origin(radio: Radio, channel: Channel, band: str | None, applied: Sequence[AppliedOverride]) -> str:
+    """Where an upstream channel's own power comes from: the last override that sets it, else its DMR template."""
+    for change in reversed(applied):
+        override = change.override
+        if (change.channel, change.mode, change.band) != (channel.callsign, channel.mode, band):
+            continue
+        if "power" in override.changes:
+            return f"the override {override.place}"
+        if "power" in override.clear:
+            break
+    template = radio.template_for(channel.callsign) if channel.mode is Mode.DMR else None
+    return f"the DMR template {template!r}" if template is not None else channel.source
+
+
 def _unfit(radio: Radio, channel: Channel) -> str | None:
     capability = radio.capability
     if channel.mode not in capability.modes:
@@ -132,20 +159,21 @@ def _unfit(radio: Radio, channel: Channel) -> str | None:
     return None
 
 
-def _fitted(radio: Radio, channel: Channel) -> tuple[Channel, str | None]:
+def _fitted(radio: Radio, channel: Channel, origin: str) -> tuple[Channel, str | None]:
     """The channel as the radio holds it: its name rewritten and cut, its power (or the profile's when it has
     none) as the radio's value, and a receive-only channel's TX frequency at its RX frequency. The note tells
-    how the radio's value differs from the channel's own watts."""
+    how the radio's value differs from the channel's own watts; `origin` names where the channel's power comes
+    from in an error."""
     name = channel.name
     for old, new in radio.name_replacements:
         name = name.replace(old, new)
     name = name[: radio.capability.name_length].rstrip()
-    power, note = _power(radio, channel)
+    power, note = _power(radio, channel, origin)
     tx_hz = channel.rx_hz if channel.rx_only else channel.tx_hz
     return replace(channel, name=name, power=power, tx_hz=tx_hz), note
 
 
-def _power(radio: Radio, channel: Channel) -> tuple[str | None, str | None]:
+def _power(radio: Radio, channel: Channel, origin: str) -> tuple[str | None, str | None]:
     profile, own = radio.power, channel.power
     if own is not None and not isinstance(own, Power | Watts):
         raise AssertionError(f"channel {channel.name!r} holds the radio value {own!r} already")
@@ -154,8 +182,8 @@ def _power(radio: Radio, channel: Channel) -> tuple[str | None, str | None]:
     if profile.fixed is not None:
         if own is not None:
             raise ConfigError(
-                f"radios.{radio.id}.power: {profile.fixed!r} is the power of every channel, but channel "
-                f"{channel.name!r} from {channel.source} sets the power {own}; make power a level or watts and "
+                f"{radio.place}.power: {profile.fixed!r} is the power of every channel, but channel "
+                f"{channel.name!r} from {origin} sets the power {own}; make power a level or watts and "
                 "map the levels in power_levels"
             )
         return profile.fixed, None
@@ -165,9 +193,7 @@ def _power(radio: Radio, channel: Channel) -> tuple[str | None, str | None]:
     try:
         resolved = profile.resolve(request)
     except PowerError as error:
-        raise ConfigError(
-            f"radios.{radio.id}.power_levels: {error} of channel {channel.name!r} from {channel.source}"
-        ) from None
+        raise ConfigError(f"{radio.place}.power_levels: {error} of channel {channel.name!r} from {origin}") from None
     return resolved.value, resolved.note if own is not None else None
 
 
