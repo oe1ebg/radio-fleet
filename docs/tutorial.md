@@ -84,6 +84,7 @@ drops: 6
   XX3EE: TX 445.00000 MHz outside the TX bands
 overrides: 0
 overrides that match nothing: 0
+power set to the nearest value: 0
 ```
 
 The own lists `simplex` and `listen` come first, then the upstream repeaters of the region. The text in brackets is the source of each channel. The channels of `listen` are receive-only (`RX only`): the radio never transmits on them. The profile's `power: High` is the power level of every channel, and its `power_levels` map `High` to `5W`. Every channel that the radio cannot carry is in `drops`, with the reason.
@@ -154,6 +155,7 @@ This step needs `dmrconf`. If it is not installed, the build fails with `dmrconf
      XX3EE: TX 445.00000 MHz outside the TX bands
    overrides: 0
    overrides that match nothing: 0
+   power set to the nearest value: 0
    ```
 
 2. Build it:
@@ -317,6 +319,10 @@ git tag applied/uv5r-mini/2026-11-22
    - XX3DD FM 2m: tone_rx=CTCSS 123 (the repeater also uses the tone for squelch)
 
    ### Overrides that match nothing (0)
+
+   None.
+
+   ### Power set to the nearest value (0)
 
    None.
    ```

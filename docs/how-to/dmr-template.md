@@ -11,7 +11,7 @@ The upstream list has one entry per DMR repeater, without a time slot or talkgro
        - {name: TS2 TG9, time_slot: 2, tx_talkgroup: TG9}
    ```
 
-   Each entry gives one channel. `name` is appended to the callsign, `time_slot` is 1 or 2, and `tx_talkgroup` and the optional `rx_group_list` must be defined in [talkgroups.yaml](talkgroups.md).
+   Each entry gives one channel. `name` is appended to the callsign, `time_slot` is 1 or 2, and `tx_talkgroup` and the optional `rx_group_list` must be defined in [talkgroups.yaml](talkgroups.md). The optional `power` is a level or watts, such as `power: Low`; a power that an override sets wins.
 
 2. Name the template in the radio's profile in `fleet.yaml`:
 

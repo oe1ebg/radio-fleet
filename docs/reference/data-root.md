@@ -48,7 +48,7 @@ A channel has these keys:
 | `time_slot` | 1 or 2 | no | DMR time slot. |
 | `tx_talkgroup` | string | no | A talkgroup of `talkgroups.yaml`. |
 | `rx_group_list` | string | no | An RX group list of `talkgroups.yaml`. |
-| `power` | string | no | The power level: `Max`, `High`, `Mid`, `Low` or `Min`. Wins over the profile's `power`; each profile maps the level to the radio's value. |
+| `power` | string | no | A power level, `Max`, `High`, `Mid`, `Low` or `Min`, or watts, such as `5W` or `0.5W`. Wins over the profile's `power`; each profile resolves it to the radio's value (see [`power`](fleet-yaml.md#power)). |
 | `tags` | list of strings | no | Added to the list's tags. |
 | `rx_only` | `true` or `false` | no | A receive-only channel, such as PMR446 or Freenet: the radio never transmits on it. Selection checks only its RX frequency. Default: `false`. |
 
@@ -83,6 +83,7 @@ An override sets or clears at least one key, and never both for one key. `tags` 
 | `templates.<name>[].time_slot` | 1 or 2 | yes | The time slot. |
 | `templates.<name>[].tx_talkgroup` | string | yes | A talkgroup of `talkgroups.yaml`. |
 | `templates.<name>[].rx_group_list` | string | no | An RX group list of `talkgroups.yaml`. |
+| `templates.<name>[].power` | string | no | A power level or watts, as on an own-list channel. A power that an override sets wins. |
 
 ## Snapshots
 
@@ -115,6 +116,6 @@ The channels have the fields of the build record below.
 |---|---|
 | `build/CHANGES.md` | The change report. See [changes.md](changes.md). |
 | `build/<radio>/<radio>.<ext>` | The checked file. See [cli.md](cli.md#fleet-build). |
-| `build/<radio>/selection.yaml` | The build record: `channels`, `drops` (name and reason), `overrides` and `unmatched_overrides` (text). |
+| `build/<radio>/selection.yaml` | The build record: `channels`, `drops` (name and reason), `overrides`, `unmatched_overrides` and `power_notes` (text). |
 
 A channel in the build record has its `name` and each of these fields that it has, as text: `rx`, `tx` (MHz with 5 decimals), `mode`, `tone_tx`, `tone_rx` (`CTCSS 88.5` or `DCS 023`), `bandwidth` (`12.5 kHz`), `color_code`, `time_slot`, `tx_talkgroup`, `rx_group_list`, `power` (the radio's value, such as `5W`), `rx_only` (`yes`).

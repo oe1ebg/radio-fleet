@@ -65,11 +65,14 @@ drops: 6
   ...
 overrides: 0
 overrides that match nothing: 0
+power set to the nearest value: 0
 ```
 
-Each channel line shows the name, the RX and TX frequency in MHz, the mode, then each value the channel has: tones, color code (`CC1`), time slot (`TS1`), talkgroup, RX group list, power (the radio's value of the channel's level) and `RX only` for a receive-only channel. The source is in brackets: the own list or the upstream source. Each zone and scan list line lists the names of its channels; a hand-made channel of the base that the rule names with `base_channel` is marked `(base)`.
+Each channel line shows the name, the RX and TX frequency in MHz, the mode, then each value the channel has: tones, color code (`CC1`), time slot (`TS1`), talkgroup, RX group list, power (the radio's value of the channel's level or watts) and `RX only` for a receive-only channel. The source is in brackets: the own list or the upstream source. Each zone and scan list line lists the names of its channels; a hand-made channel of the base that the rule names with `base_channel` is marked `(base)`.
 
 Each override line shows the callsign, the mode and band of the channel it changed, the fields it sets (`field=value`) or clears (`field=-`) and its reason. An override that matches nothing shows the callsign and the mode and band it names. It matches nothing when no upstream channel has its callsign, mode and band, whether in the radio's region or not.
+
+Each `power set to the nearest value` line names a channel whose watts the radio sets to another value, with the requested watts and the result, such as `XX1AA: 25W -> Max (5W)` or `XX1AA: 2.4W -> 2W`. See [`power`](fleet-yaml.md#power).
 
 `fleet select` checks every profile of the fleet file, not only the selected one. A missing own list, template, base or factory file of any radio fails it, and so does an override that names a radio the fleet file does not have.
 

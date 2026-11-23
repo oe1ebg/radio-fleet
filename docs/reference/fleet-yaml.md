@@ -46,8 +46,9 @@ The Hytera command lines run in the data root. A placeholder can be a whole argu
 | `dmr_templates` | mapping | no | Other templates by callsign or callsign prefix, such as `{XX1BB: local, XX3: south}`. The longest key that a callsign starts with wins over `dmr_template`. Default: none. |
 | `zones` | list | no | Zone rules. Default: none. |
 | `scan_lists` | list | qdmr | Scan-list rules. Default: none. Only the `qdmr` renderer takes them. |
-| `power` | string | no | The power level of every channel that sets none. See [`power`](#power). |
-| `power_levels` | mapping | no | The radio's value of each power level. The `chirp` renderer needs it for every level its channels have, and so does `jayt`. See [`power`](#power). |
+| `power` | string | no | The power of every channel that sets none: a level or watts. See [`power`](#power). |
+| `power_levels` | mapping | no | The watts, or the radio's value, of each power level. The `chirp` renderer needs it for every level its channels have, and so does `jayt`. See [`power`](#power). |
+| `power_range` | mapping | no | `{min, max, step}` in watts, for a radio that sets watts in steps. No renderer writes it yet. See [`power`](#power). |
 | `naming` | mapping | no | The names of upstream channels, and name replacements. |
 
 A file that a profile names (`base`, `factory`, an own list, the file of the templates) must exist, and so must every template that `dmr_template` and `dmr_templates` name. If one is missing, every `select` and `build` fails, for every radio, with the file name:
@@ -132,24 +133,50 @@ A limit that is not given is no limit. A channel that a zone or scan list does n
 
 ### `power`
 
-A channel carries a power level: `Max`, `High`, `Mid`, `Low` or `Min`. The level comes from the channel (an own list or an override) or else from the profile's `power`. The profile's `power_levels` maps each level to the radio's own value:
+A channel asks for a power in one of two forms: a level, `Max`, `High`, `Mid`, `Low` or `Min`, or watts, a number and `W`, such as `5W` or `0.5W`. The request comes from the channel (an own list, an override or a DMR template entry; an override wins over the template) or else from the profile's `power`. The shared levels are only these five; a radio's own names, such as AnyTone's Turbo, stay in its profile, mapped to `Max`.
+
+A profile describes the radio's power in one of two forms.
+
+**Named levels.** `power_levels` maps each level to watts, or to the radio's own value:
 
 ```yaml
 power: High
 power_levels: {Max: 5W, High: 5W, Mid: 2W, Low: 1W, Min: 0.5W}
 ```
 
-| Renderer | Values | Levels that `power_levels` leaves out |
+- A level gives the renderer's value of the level: the level itself for `qdmr`, its watts for `chirp`, and the Hytera level for `hytera` (see the table below). A level that `power_levels` maps to a radio value, such as `High: Mid` for `qdmr` or `Low: LOW2` for `jayt`, gives that value.
+- Watts give the nearest level that `power_levels` maps to watts. A tie goes to the lower watts; watts below the lowest level give the lowest, and watts above the highest give the highest. Of two levels with the same watts, the higher level wins.
+
+**A stepped range**, for a radio that sets real watts, such as the Yaesu FTX-1 in 1 W steps:
+
+```yaml
+power_range: {min: 1W, max: 10W, step: 1W}
+power_levels: {Max: 10W, High: 10W, Mid: 5W, Low: 2W, Min: 1W}
+```
+
+- `max` must be `min` plus whole steps, and every watts of `power_levels` must be a step of the range.
+- A level gives its watts from `power_levels`. Watts give the nearest step inside the range: a tie goes to the lower step, watts below `min` give `min` and watts above `max` give `max`.
+- No renderer writes a stepped range yet: the FTX-1 renderer waits for jayt. `fleet.yaml` reads and checks `power_range`, then refuses it with `radios.R.power_range: the R renderer writes no stepped power range yet`.
+
+When the radio's watts differ from the watts a channel asks for, the selection reports it as a line, not an error: `fleet select` prints it under `power set to the nearest value`, and `build/CHANGES.md` under `Power set to the nearest value`. The line names the channel, the requested watts and the result: `XX1AA: 25W -> Max (5W)` for named levels, `XX1AA: 2.4W -> 2W` for a range. The profile's own `power` is reported once, as `power of the profile: 25W -> Max (5W)`.
+
+| Renderer | Values of `power_levels` | Levels that `power_levels` leaves out |
 |---|---|---|
-| `qdmr` | `Max`, `High`, `Mid`, `Low`, `Min` | the level itself |
-| `chirp` | watts: a number and `W`, such as `5W` or `0.5W`. Every channel needs a power. | no value |
-| `jayt` | `LOW`, `LOW2`, `LOW3`, `HIGH`, in any case | no value |
-| `hytera` | `High`, `Middle`, `Low` | `Max` and `High`: `High`; `Mid`: `Middle`; `Low` and `Min`: `Low` |
-| `ft5d` | none: the FT5D renderer writes no power, and `power` takes only a level | |
+| `qdmr` | watts, or `Max`, `High`, `Mid`, `Low`, `Min` | the level itself |
+| `chirp` | watts. Every channel needs a power. | no value |
+| `jayt` | `LOW`, `LOW2`, `LOW3`, `HIGH`, in any case; no watts | no value |
+| `hytera` | watts, or `High`, `Middle`, `Low` | `Max` and `High`: `High`; `Mid`: `Middle`; `Low` and `Min`: `Low` |
+| `ft5d` | none: the FT5D renderer writes no power, and `power` takes only a level or watts | |
 
-`fleet.yaml` is refused when a value is not one of the renderer's, naming the key, such as `radios.uv5r-mini.power_levels.Low: the chirp renderer takes the power as watts, such as 5W, not 'High'`. A channel whose level has no value fails `fleet select` and `fleet build`, naming the profile, the channel and its own list or source: `radios.uv5r-mini.power_levels: no value for the power Mid of channel 'Hill 2m' from hills`.
+A request that the profile cannot resolve is an error that names the profile:
 
-A `power` that is not a level, such as `power: 5W`, is the radio's value of every channel, as in profiles from before the levels. Such a profile takes no `power_levels`, and a channel that sets its own level, in its own list or by an override, fails `fleet select` and `fleet build`: `radios.uv5r-mini.power: '5W' is the power of every channel, but channel 'Hill 2m' from hills sets the level Low; make power a level and map the levels in power_levels`.
+- `fleet.yaml` is refused when a value is not one of the renderer's, naming the key, such as `radios.uv5r-mini.power_levels.Low: the chirp renderer takes the power as watts, such as 5W, not 'High'`, and when the profile's own `power` has no value: `radios.d878uv2plus.power: no level with watts for the power 5W in power_levels`.
+- A channel whose level has no value, or whose watts find no level with watts, fails `fleet select` and `fleet build`, naming the profile, the channel and its own list or source: `radios.uv5r-mini.power_levels: no value for the power Mid of channel 'Hill 2m' from hills`, `radios.d878uv2plus.power_levels: no level with watts for the power 5W of channel 'Hill 2m' from hills`.
+
+Profiles and lists from before the levels build unchanged:
+
+- A `chirp` profile without `power_levels` writes the watts of a channel, or of its `power`, such as `power: 5W`, as they are. A level on such a profile fails, as above.
+- A `power` that is neither a level nor watts, such as `power: LOW2` for `jayt`, is the radio's value of every channel. Such a profile takes no `power_levels`, and a channel that sets its own power fails `fleet select` and `fleet build`: `radios.ft3185.power: 'LOW2' is the power of every channel, but channel 'Hill 2m' from hills sets the power Low; make power a level or watts and map the levels in power_levels`.
 
 ### `naming`
 
@@ -169,7 +196,7 @@ naming:
 | Renderer | Carries | Needs | Uses zones | Uses scan lists | Receive-only channels |
 |---|---|---|---|---|---|
 | `qdmr` | FM, DMR | `base`, `dmrconf_radio`, dmrconf | yes, as qdmr zones | yes, as qdmr scan lists; each generated channel refers to the first one that takes it | `rxOnly: true` |
-| `chirp` | FM | `power` and `power_levels` in watts | no | no | `Duplex` `off` |
+| `chirp` | FM | `power` in watts, or `power` and `power_levels` in watts | no | no | `Duplex` `off` |
 | `ft5d` | FM, C4FM | memory-channels-processor (installed with radio-fleet) | yes, as banks 1 to 24 | no | dropped |
 | `jayt` | FM, FT-3185 only | `base`, `tools.jayt` | no | no | dropped |
 | `hytera` | FM, DMR | `base`, `factory`, `tools.hytera` | yes | no | dropped |

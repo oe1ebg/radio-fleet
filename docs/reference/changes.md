@@ -19,6 +19,7 @@ Each radio's build in `build/` against its last applied build in `applied.yaml`.
 ### Drops (<n>)
 ### Overrides (<n>)
 ### Overrides that match nothing (<n>)
+### Power set to the nearest value (<n>)
 ```
 
 There is one `##` section per radio of `fleet.yaml`, in the order of the file. A list with no items says `None.`.
@@ -42,6 +43,7 @@ There is one `##` section per radio of `fleet.yaml`, in the order of the file. A
 | Drops | `<name>: <reason>`: each channel, zone and scan list that the selection dropped |
 | Overrides | `<callsign> <mode> <band>: <field>=<value>, ... (<reason>)`: each override that the build applied, once per channel it changed; a cleared field shows as `<field>=-` |
 | Overrides that match nothing | `<callsign> [<mode>] [<band>]: <field>=<value>, ... (<reason>)`: each override for the radio that matches no upstream channel, with the mode and band it names |
+| Power set to the nearest value | `<name>: <watts> -> <level> (<watts>)` or `<name>: <watts> -> <watts>`: each channel whose watts the radio sets to another value, such as `XX1AA: 25W -> Max (5W)`; the profile's own `power` is reported once as `power of the profile: ...` |
 
 Example:
 

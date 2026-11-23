@@ -8,7 +8,7 @@
    fleet build --radio uv5r-mini
    ```
 
-2. Read the radio's section in `build/CHANGES.md`. Check the added, removed and changed channels, the drops, the overrides and the overrides that match nothing. The format is in [reference/changes.md](../reference/changes.md).
+2. Read the radio's section in `build/CHANGES.md`. Check the added, removed and changed channels, the drops, the overrides, the overrides that match nothing and the powers set to the nearest value. The format is in [reference/changes.md](../reference/changes.md).
 
    ```markdown
    ## uv5r-mini: Baofeng UV-5R mini (chirp)

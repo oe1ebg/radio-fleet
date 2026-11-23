@@ -31,10 +31,14 @@ Messages start with `fleet <command>:`. A build error also names the radio: `fle
 | `fleet.yaml: radios.R.base: no file P` | A base or factory file is missing. This fails every `select` and `build`, for every radio. |
 | `fleet.yaml: radios.R.own_lists: no own list 'L': no file sources/own/L.yaml` | Make the list, or remove it from `own_lists`. |
 | `fleet.yaml: radios.R.dmr_template: no template 'T' in sources/dmr_templates.yaml` | Define the template, or remove it from the profile. `radios.R.dmr_templates.K` says the same of a template named for a callsign or prefix. |
-| `fleet.yaml: radios.R.power: the qdmr renderer takes the power as Max, High, Mid, Low or Min, not '5W'` | A value that the renderer does not take, in `power` or `power_levels.<level>`. Each renderer names its own values. |
+| `fleet.yaml: radios.R.power: the qdmr renderer takes the power as Max, High, Mid, Low or Min, not 'Turbo'` | A value that the renderer does not take, in `power` or `power_levels.<level>`. Each renderer names its own values. A radio's own name, such as Turbo, is not a power: map the level `Max` to the radio's value instead. |
+| `fleet.yaml: radios.R.power: no level with watts for the power 5W in power_levels` | The profile's `power` is watts, and `power_levels` gives no level watts. Map the levels to watts. `no value for the power L in power_levels` is the same for a level that the profile does not map. |
+| `fleet.yaml: radios.R.power_range: the R renderer writes no stepped power range yet` | No renderer writes a `power_range` yet. Use `power_levels`. |
+| `fleet.yaml: radios.R.power_range.max: 10W is not 1W plus whole steps of 2W` | `max` must be `min` plus whole steps. `power_range: expected min below max and a step above 0W` and `expected watts, such as 5W` are the other checks of the range. |
+| `fleet.yaml: radios.R.power_levels.High: 5.5W is not a step of power_range` | With a `power_range`, every watts of `power_levels` must be one of its steps. |
 | `fleet.yaml: radios.R.power_levels.Top: power levels are Max, High, Mid, Low, Min` | A key of `power_levels` must be a level. |
-| `fleet.yaml: radios.R.power: with power_levels, power is a level: Max, High, Mid, Low, Min` | With `power_levels`, `power` names the default level, not a value. |
-| `fleet.yaml: radios.R.power_levels: the ft5d renderer writes no power; power takes only a level` | Remove `power_levels`, or give `power` a level. |
+| `fleet.yaml: radios.R.power: power is a level (Max, High, Mid, Low, Min) or watts, such as 5W` | With `power_levels` or `power_range`, `power` is a level or watts, not a radio value. |
+| `fleet.yaml: radios.R.power_levels: the ft5d renderer writes no power; power takes only a level or watts` | Remove `power_levels` and `power_range`, or give `power` a level or watts. |
 | `fleet.yaml: radios.R.region.modes.M: modes are FM, DMR, C4FM, D-STAR` | A key of `region.modes` must be a mode. |
 | `fleet.yaml: radios.R.naming.upstream: a name takes only the fields {callsign}, {band}, {site}, not {F}` | Use only those fields, without a format spec. |
 | `fleet.yaml: radios.R.dmrconf_radio: only the qdmr renderer takes a dmrconf radio` | Remove `dmrconf_radio`, or change the renderer. |
@@ -54,7 +58,7 @@ Messages start with `fleet <command>:`. A build error also names the radio: `fle
 | `sources/overrides.yaml: overrides[0].clear: 'K' is both set and cleared` | Set the key or clear it, not both. |
 | `sources/overrides.yaml: overrides[0].clear: cannot clear 'K'; clear takes ...` | Only optional keys can be cleared. Use `set` for the others. |
 | `sources/overrides.yaml: overrides[0].radios: no radio 'R' in fleet.yaml` | Name radios of `fleet.yaml`. |
-| `...: channels[0].power: power is a level: Max, High, Mid, Low, Min; ...` | A channel's or override's `power` is a level. The profile's `power_levels` map it to watts or the radio's own value. |
+| `...: channels[0].power: power is a level (Max, High, Mid, Low, Min) or watts, such as 5W, not 'Turbo'` | A channel's, override's or DMR template entry's `power` is a level or watts. The profile resolves it to the radio's value. |
 | `...: channels[0].tx: a receive-only channel has no TX frequency` | Remove `tx`, or `rx_only`. |
 | `...: talkgroup 'X' is not defined in talkgroups.yaml` | Define the talkgroup in `sources/talkgroups.yaml`. |
 | `...: RX group list 'X' is not defined in talkgroups.yaml` | Define the RX group list. |
@@ -72,8 +76,9 @@ Messages start with `fleet <command>:`. A build error also names the radio: `fle
 
 | Message | Cause and fix |
 |---|---|
-| `radios.R.power_levels: no value for the power L of channel 'C' from S` | The channel has the level `L`, from its own list or source `S` or from an override, and the profile maps no value for it. Add `L` to `power_levels`. `fleet select` fails the same way. |
-| `radios.R.power: 'V' is the power of every channel, but channel 'C' from S sets the level L; make power a level and map the levels in power_levels` | The profile's `power` is a radio value `V`, as before the levels, and the channel has its own level `L`, from its own list or source `S` or from an override. Give the profile a level as `power` and map the levels in `power_levels`. `fleet select` fails the same way. |
+| `radios.R.power_levels: no value for the power L of channel 'C' from S` | The channel has the level `L`, from its own list or source `S`, an override or a DMR template, and the profile maps no value for it. Add `L` to `power_levels`. With a `power_range` the message says `no watts for the power L`. `fleet select` fails the same way. |
+| `radios.R.power_levels: no level with watts for the power W of channel 'C' from S` | The channel asks for the watts `W`, and the profile has no level with watts and no `power_range`. Map the levels to watts in `power_levels`. `fleet select` fails the same way. |
+| `radios.R.power: 'V' is the power of every channel, but channel 'C' from S sets the power P; make power a level or watts and map the levels in power_levels` | The profile's `power` is a radio value `V`, as before the levels, and the channel has its own power `P`, from its own list or source `S`, an override or a DMR template. Give the profile a level or watts as `power` and map the levels in `power_levels`. `fleet select` fails the same way. |
 | `the qdmr renderer needs a base and a dmrconf_radio in the profile` | Set both. |
 | `dmrconf is not installed: dmrconf not found` | Install qdmr 0.15, so `dmrconf` is on the `PATH`. |
 | `dmrconf verify failed:` and dmrconf's output | The codeplug does not fit the radio. Read dmrconf's message. |

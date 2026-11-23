@@ -47,13 +47,15 @@ Each requirement has an acceptance criterion. Tests are data-free: synthetic cha
     - the region: a locator and maximum km, or callsign prefixes; optionally a different region per mode, and callsigns to exclude;
     - the own lists it includes;
     - zone/bank rules and scan-list rules, as filter expressions;
-    - power: channels carry a power level (Max, High, Mid, Low, Min), and the profile maps the levels to the radio's values (for example watts for CHIRP);
+    - power: a channel, an override, a DMR template entry and the profile's default ask for a power as a level (Max, High, Mid, Low, Min) or as watts (for example 5W or 0.5W). Radio-specific names, such as AnyTone's Turbo, stay in the profile, mapped to a level. The profile describes the radio's power either as named levels, which `power_levels` maps to watts or to the radio's own value, or as a stepped range of watts (`power_range` with min, max and step, for example the Yaesu FTX-1 in 1 W steps) plus `power_levels` that give each level its watts. A level gives its value from `power_levels`; watts give the nearest level with watts, or the nearest step inside the range, a tie going to the lower value, below the lowest giving the lowest and above the highest giving the highest. A result that differs from the requested watts is reported, not refused (for example `25W -> Max (5W)` or `2.4W -> 2W`). A level or watts that the profile has no map for is an error naming the profile. A data root that gives watts per channel, as before the levels, builds without migration;
     - naming: upstream channel names can include the band, so that two bands of one callsign get different names.
   - Selection drops every channel the radio cannot carry and records the reason. An example is a TX frequency outside the radio's TX range.
   - *Accept:*
     - the selection of a synthetic fleet gives the expected channels per radio, per zone and per scan list, and the expected list of drops with reasons;
     - a profile without zone or scan-list limits keeps all its zones and scan lists;
     - a channel with power `High` gets the radio's mapped value in every renderer;
+    - watts give the nearest level, a tie gives the lower one, and watts below and above the levels or the range give the lowest and the highest; a stepped range rounds watts to its nearest step; each result that differs from the requested watts is a report line;
+    - a level or watts without the profile's map fails with the profile's name;
     - an excluded callsign is dropped with a reason.
 - **R5 qdmr renderer.**
   - Merge the selection into the radio's base qdmr YAML. Keep its settings, radio IDs, APRS/positioning and every hand-made object.

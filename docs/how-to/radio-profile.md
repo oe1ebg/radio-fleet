@@ -47,6 +47,7 @@ This guide adds a second Retevis RT95 that carries the repeaters within 60 km of
      XX3EE: TX 445.00000 MHz outside the TX bands
    overrides: 0
    overrides that match nothing: 0
+   power set to the nearest value: 0
    ```
 
 3. Read every drop. If a channel is dropped that the radio should carry, change the profile and run `fleet select` again.
@@ -127,22 +128,24 @@ Selection keeps at most `capability.zones` zones and `capability.scan_lists` sca
 
 ## Power
 
-Channels carry a power level: `Max`, `High`, `Mid`, `Low` or `Min`. `power` is the level of every channel that does not set its own, and `power_levels` maps each level to the radio's value:
+A channel asks for a power as a level, `Max`, `High`, `Mid`, `Low` or `Min`, or as watts, such as `5W`. `power` is the power of every channel that does not set its own, and `power_levels` maps each level to watts or to the radio's value:
 
 ```yaml
 power: High
 power_levels: {Max: 25W, High: 25W, Mid: 10W, Low: 5W, Min: 5W}
 ```
 
-| Renderer | Values | Without `power_levels` |
+| Renderer | Values of `power_levels` | Without `power_levels` |
 |---|---|---|
-| `qdmr` | `Max`, `High`, `Mid`, `Low`, `Min` | each level is its own value |
-| `chirp` | watts, such as `5W` or `0.5W`; every channel needs one | no value |
+| `qdmr` | watts, or `Max`, `High`, `Mid`, `Low`, `Min` | each level is its own value |
+| `chirp` | watts, such as `5W` or `0.5W`; every channel needs a power | watts pass as they are; a level has no value |
 | `jayt` | `LOW`, `LOW2`, `LOW3`, `HIGH` | no value |
-| `hytera` | `High`, `Middle`, `Low` | `Max`, `High`: `High`; `Mid`: `Middle`; `Low`, `Min`: `Low` |
+| `hytera` | watts, or `High`, `Middle`, `Low` | `Max`, `High`: `High`; `Mid`: `Middle`; `Low`, `Min`: `Low` |
 | `ft5d` | none: the FT5D writes no power | |
 
-A value the renderer does not take is refused when `fleet.yaml` is read, with the profile and the key. A level that a channel has and the profile does not map fails the selection, with the channel and its list. A `power` that is not a level, such as `power: 25W`, is the radio's value of every channel; a channel that sets its own level then fails the selection. Make `power` a level and add `power_levels` to use levels.
+Watts go to the nearest level that `power_levels` maps to watts, the lower one on a tie: with the map above, `20W` gives `Max` (25W; of two levels with the same watts the higher wins) and `7W` gives `Low` (5W). `fleet select` lists each channel whose watts changed under `power set to the nearest value`, such as `XX1AA: 7W -> Low (5W)`; `build/CHANGES.md` lists them too. A radio that sets watts in steps, such as the Yaesu FTX-1, takes `power_range: {min: 1W, max: 10W, step: 1W}` instead, but no renderer writes a range yet. See the [fleet.yaml reference](../reference/fleet-yaml.md#power).
+
+A value the renderer does not take is refused when `fleet.yaml` is read, with the profile and the key. A level or watts that a channel has and the profile cannot resolve fails the selection, with the profile, the channel and its list. A `power` that is neither a level nor watts, such as `power: LOW2` on a jayt radio, is the radio's value of every channel; a channel that sets its own power then fails the selection. Make `power` a level or watts and add `power_levels` to use levels.
 
 ## Naming
 

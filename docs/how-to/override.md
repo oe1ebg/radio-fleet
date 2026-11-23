@@ -18,7 +18,7 @@ An override changes the upstream channels of one callsign. Use it when the upstr
      - `mode`: only the channels of this mode, such as `FM`.
      - `band`: only the channels whose RX frequency is in the band of this name in the radio's `capability.bands`, such as `70cm`. Use it for a callsign with a repeater on two bands.
      - `radios`: only on these radios of `fleet.yaml`, such as `[uv5r-mini, rt95]`.
-   - `set` takes any channel key of an own list, with the values of an own list channel: `name`, `rx`, `tx`, `mode`, `tone_tx`, `tone_rx`, `bandwidth`, `color_code`, `time_slot`, `tx_talkgroup`, `rx_group_list`, `power` (a level), `tags` and `rx_only`.
+   - `set` takes any channel key of an own list, with the values of an own list channel: `name`, `rx`, `tx`, `mode`, `tone_tx`, `tone_rx`, `bandwidth`, `color_code`, `time_slot`, `tx_talkgroup`, `rx_group_list`, `power` (a level or watts), `tags` and `rx_only`.
    - `clear` removes keys from the channel: any of `tone_tx`, `tone_rx`, `bandwidth`, `color_code`, `time_slot`, `tx_talkgroup`, `rx_group_list`, `power` and `tags`. For example, `clear: [tone_rx]` makes the radio squelch on the carrier.
 
 2. Check that the override applies:
@@ -32,6 +32,7 @@ An override changes the upstream channels of one callsign. Use it when the upstr
    overrides: 1
      XX3DD FM 2m: tone_rx=CTCSS 123 (the repeater also uses the tone for squelch)
    overrides that match nothing: 0
+   power set to the nearest value: 0
    ```
 
    The line names the callsign, the mode and the band of the channel that the override changed. A cleared key shows as `key=-`.

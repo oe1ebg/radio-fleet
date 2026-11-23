@@ -68,15 +68,15 @@ Selection checks only the RX frequency of a receive-only channel against the rad
 ## What to check
 
 - A channel whose mode, RX or TX frequency the radio cannot carry is dropped, with the reason. The region does not apply to own lists.
-- A `power` on a channel is a level: `Max`, `High`, `Mid`, `Low` or `Min`. It wins over the `power` of the profile, and each radio's `power_levels` turn it into the radio's value, such as `1W` on a CHIRP radio and `Low` on a qdmr radio (see the [fleet.yaml reference](../reference/fleet-yaml.md#power)). So one list can feed radios of every renderer. If a radio maps no value for the level, its selection fails and names the channel and the list:
+- A `power` on a channel is a level, `Max`, `High`, `Mid`, `Low` or `Min`, or watts, such as `5W` or `0.5W`. It wins over the `power` of the profile, and each radio's profile turns it into the radio's value, such as `1W` on a CHIRP radio and `Low` on a qdmr radio (see the [fleet.yaml reference](../reference/fleet-yaml.md#power)). Watts go to the radio's nearest level, and `fleet select` reports each change, such as `Hill 2m: 3W -> Mid (2W)`. So one list can feed radios of every renderer. If a radio maps no value for the level, or no level to watts, its selection fails and names the profile, the channel and the list:
 
   ```text
   fleet select: radios.uv5r-mini.power_levels: no value for the power Low of channel 'Hill 2m' from hills
   ```
 
-  A profile whose `power` is a radio value, such as `power: 5W`, gives no level a value, so a channel with a level fails its selection the same way: `radios.uv5r-mini.power: '5W' is the power of every channel, but channel 'Hill 2m' from hills sets the level Low; ...`. Make the profile's `power` a level and add `power_levels`.
+  A profile whose `power` is a radio value, such as `power: LOW2` on a jayt radio, gives no level a value, so a channel with its own power fails its selection: `radios.ft3185.power: 'LOW2' is the power of every channel, but channel 'Hill 2m' from hills sets the power Low; ...`. Make the profile's `power` a level or watts and add `power_levels`.
 
-  A radio value in a list, such as `power: 5W`, is refused: `sources/own/hills.yaml: channels[0].power: power is a level: Max, High, Mid, Low, Min; the radio profile maps it to the radio's value`.
+  A radio value in a list, such as `power: Turbo`, is refused: `sources/own/hills.yaml: channels[0].power: power is a level (Max, High, Mid, Low, Min) or watts, such as 5W, not 'Turbo'`.
 - A DMR channel names its talkgroup and RX group list by name. Define them first: see [Talkgroups and RX group lists](talkgroups.md).
 - The list's `tags` and the channel's `tags` both go to the channel. A zone or scan-list rule can select channels by tag or by `source: hills`.
 
