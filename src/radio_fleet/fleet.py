@@ -74,8 +74,6 @@ _POWER_VALUES: Mapping[Renderer, _PowerValues] = {
     ),
 }
 _WATTS_RENDERERS = frozenset({Renderer.CHIRP})
-_RANGE_RENDERERS: frozenset[Renderer] = frozenset()
-"""The renderers that write the watts of a `power_range`; none yet."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -316,7 +314,7 @@ def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
         for key in ("zones", "scan_lists")
     }
     radio_power = _power(renderer, fields.get("power"), fields.get("power_levels"), fields.get("power_range"))
-    if "power_range" in fields and renderer not in _RANGE_RENDERERS:
+    if "power_range" in fields:
         raise fields["power_range"].error(f"the {renderer} renderer writes no stepped power range yet")
     upstream_name, replacements = _naming(fields["naming"]) if "naming" in fields else (_UPSTREAM_NAME, ())
     templates = fields["dmr_templates"].entries() if "dmr_templates" in fields else {}
