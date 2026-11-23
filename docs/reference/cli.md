@@ -8,14 +8,15 @@ Without a command, `fleet` prints its help and exits with 0. `fleet --version` p
 
 ## Options of every command
 
-Each command takes these options. Give them after the command name: `fleet select --data DIR --radio R`, not `fleet --data DIR select`.
+Each command takes these options. `--data` also goes before the command name: `fleet --data DIR select --radio R` is the same as `fleet select --data DIR --radio R`, and a `--data` after the command name wins.
 
 | Option | Default | Meaning |
 |---|---|---|
 | `--data DIR` | `$FLEET_DATA`, else the current directory | The data root. See [data-root.md](data-root.md). |
 | `--fleet FILE` | `DATA/fleet.yaml` | The fleet file. Paths in it stay relative to the data root, not to this file. |
-| `--snapshots DIR` | `DATA/snapshots` | The snapshot directory. `publish` and `applied` do not use it. |
 | `-h`, `--help` | | Print the command's help. |
+
+`fetch`, `select` and `build` also take `--snapshots DIR` (default `DATA/snapshots`), the snapshot directory. `publish` and `applied` do not read snapshots and do not take it.
 
 ## `fleet fetch`
 
@@ -106,10 +107,10 @@ Every build that gets to the render step rewrites `build/CHANGES.md`, also when 
 ## `fleet publish`
 
 ```text
-fleet publish [--data DATA] [--fleet FLEET] [--snapshots SNAPSHOTS] radio
+fleet publish [--data DATA] [--fleet FLEET] radio
 ```
 
-Copies every file of `DATA/build/<radio>/` to `<equipment>/<radio>/generated/<date>/`, with today's date as `YYYY-MM-DD`. `equipment` is a key of the fleet file.
+Copies every file of `DATA/build/<radio>/` to `<equipment>/<equipment_dir>/generated/<date>/`, with today's date as `YYYY-MM-DD`. `equipment` is a key of the fleet file, and `equipment_dir` a key of the radio's profile, the radio id when it is not given. For example, a profile with `equipment_dir: anytone/d878uv2plus` publishes to `equipment/anytone/d878uv2plus/generated/<date>/`.
 
 ```text
 $ fleet publish uv5r-mini
@@ -124,14 +125,14 @@ uv5r-mini: equipment/uv5r-mini/generated/2026-11-22
 ## `fleet applied`
 
 ```text
-fleet applied [--data DATA] [--fleet FLEET] [--snapshots SNAPSHOTS] radio
+fleet applied [--data DATA] [--fleet FLEET] radio
 ```
 
 Records the build in `DATA/build/<radio>/` as the build that is in the radio: it writes the date, the digest and the channels to `DATA/applied.yaml`, rewrites `build/CHANGES.md` and prints the git tag command.
 
 ```text
 $ fleet applied uv5r-mini
-uv5r-mini: sha256:2d90061895bed8d3e7885334d39bba4b49964123e67aa1c14fda8d8afdc4c0d7 in applied.yaml
+uv5r-mini: sha256:e8f516c8a8abb6fb1de61820636b4d5cfc5afef604087a511144f4199889b6c1 in applied.yaml
 git tag applied/uv5r-mini/2026-11-22
 ```
 

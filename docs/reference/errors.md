@@ -43,7 +43,10 @@ Messages start with `fleet <command>:`. A build error also names the radio: `fle
 | `fleet.yaml: radios.R.naming.upstream: a name takes only the fields {callsign}, {band}, {site}, not {F}` | Use only those fields, without a format spec. |
 | `fleet.yaml: radios.R.dmrconf_radio: only the qdmr renderer takes a dmrconf radio` | Remove `dmrconf_radio`, or change the renderer. |
 | `fleet.yaml: radios.R.factory: only the hytera renderer takes a factory image` | Remove `factory`, or change the renderer. |
-| `fleet.yaml: radios.R.scan_lists: only the qdmr renderer takes scan lists` | Remove `scan_lists`, or change the renderer. |
+| `fleet.yaml: radios.R.scan_lists: only the qdmr and chirp renderers take scan lists` | Remove `scan_lists`, or change the renderer. |
+| `fleet.yaml: radios.R.step: only the chirp renderer takes a tuning step` | Remove `step`, or change the renderer. |
+| `...: step: a tuning step is one of 1, 2.5, 5, 6.25, 9, 10, 12.5, 15, 20, 25, 30, 50, 100, 125, 200 kHz` | A profile's or a channel's `step` must be one of CHIRP's tuning steps, in kHz. |
+| `fleet.yaml: radios.R.equipment_dir: expected a directory inside the equipment directory, such as anytone/d878` | `equipment_dir` is a relative path without `..`. |
 | `fleet.yaml: radios.R.zones[N].base_channel: only the qdmr renderer takes base channels` | Remove `base_channel`, or change the renderer. |
 | `fleet.yaml: tools.jayt.commit: expected a git commit: 7 to 40 hex digits` | Give the commit as a quoted string of lowercase hex digits. |
 | `fleet.yaml: tools.hytera.export: expected a list of arguments with exactly the placeholders {base}, {document}` | Each command line must name exactly its files. |
@@ -76,15 +79,16 @@ Messages start with `fleet <command>:`. A build error also names the radio: `fle
 
 | Message | Cause and fix |
 |---|---|
-| `radios.R.power_levels: no value for the power L of channel 'C' from S` | The channel has the level `L`, from its own list or source `S`, an override or a DMR template, and the profile maps no value for it. Add `L` to `power_levels`. With a `power_range` the message says `no watts for the power L`. `fleet select` fails the same way. |
-| `radios.R.power_levels: no level with watts for the power W of channel 'C' from S` | The channel asks for the watts `W`, and the profile has no level with watts and no `power_range`. Map the levels to watts in `power_levels`. `fleet select` fails the same way. |
-| `radios.R.power: 'V' is the power of every channel, but channel 'C' from S sets the power P; make power a level or watts and map the levels in power_levels` | The profile's `power` is a radio value `V`, as before the levels, and the channel has its own power `P`, from its own list or source `S`, an override or a DMR template. Give the profile a level or watts as `power` and map the levels in `power_levels`. `fleet select` fails the same way. |
+| `fleet.yaml: radios.R.power_levels: no value for the power L of channel 'C' from S` | The channel has the level `L` from `S`: `the own list sources/own/N.yaml`, `the override sources/overrides.yaml: overrides[I]` or `the DMR template 'T'`, and the profile maps no value for it. Add `L` to `power_levels`. With a `power_range` the message says `no watts for the power L`. `fleet select` fails the same way. |
+| `fleet.yaml: radios.R.power_levels: no level with watts for the power W of channel 'C' from S` | The channel asks for the watts `W` from `S`, as above, and the profile has no level with watts and no `power_range`. Map the levels to watts in `power_levels`. `fleet select` fails the same way. |
+| `fleet.yaml: radios.R.power: 'V' is the power of every channel, but channel 'C' from S sets the power P; make power a level or watts and map the levels in power_levels` | The profile's `power` is a radio value `V`, as before the levels, and the channel has its own power `P` from `S`, as above. Give the profile a level or watts as `power` and map the levels in `power_levels`. `fleet select` fails the same way. |
 | `the qdmr renderer needs a base and a dmrconf_radio in the profile` | Set both. |
 | `dmrconf is not installed: dmrconf not found` | Install qdmr 0.15, so `dmrconf` is on the `PATH`. |
 | `dmrconf verify failed:` and dmrconf's output | The codeplug does not fit the radio. Read dmrconf's message. |
 | `channel C: CHIRP needs a power: give the profile a power level and its watts, such as power: High and power_levels: {High: 5W}` | The channel has no power level. Give the profile `power` and `power_levels`. |
 | `channel C: the CHIRP renderer carries FM, not DMR` | Remove the mode from `capability.modes`. The other renderers say the same in their own words. |
 | `channel C: RX F MHz is on no CHIRP tuning step` | Correct the frequency. |
+| `channel C: RX F MHz or its offset is not on its step S kHz` | The channel's own `step` does not fit its frequency or offset. Correct the `step`, or remove it. |
 | `channel C: memory-channels-processor's FT5D output carries no DCS` | Use CTCSS, or override the channel. |
 | `the CSV check failed: ...` | The CSV does not fit the radio. |
 | `the jayt renderer needs tools.jayt (path and commit) in the fleet file` | Add `tools.jayt`. |

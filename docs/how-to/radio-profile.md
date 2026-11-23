@@ -114,7 +114,7 @@ zones:
 
 The `channel` pattern matches the name after `naming` and after the cut to `name_length`. A rule that matches no channel is dropped with `matches no channel`. The renderers use zones as follows: qdmr and Hytera write zones, the FT5D writes banks 1 to 24, and the CHIRP and jayt renderers do not use them.
 
-Scan-list rules under `scan_lists` take the same keys. Only the qdmr renderer takes scan-list rules; another renderer refuses them when `fleet.yaml` is read. Each generated channel refers to the first scan list that takes it, so the radio scans that list when you start a scan on the channel.
+Scan-list rules under `scan_lists` take the same keys. Only the qdmr and CHIRP renderers take scan-list rules; another renderer refuses them when `fleet.yaml` is read. With qdmr, each generated channel refers to the first scan list that takes it, so the radio scans that list when you start a scan on the channel. CHIRP has one scan for the whole radio: a channel that no scan list takes gets `Skip` `S`, so the scan passes it. A channel's own `skip: true` or `skip: false` wins over the rules.
 
 ```yaml
 scan_lists:

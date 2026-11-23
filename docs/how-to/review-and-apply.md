@@ -26,7 +26,7 @@
 
 3. If the report shows something you do not want, change the sources or the profile and build again.
 
-4. Publish the build. It is copied to `<equipment>/<radio>/generated/<date>/`:
+4. Publish the build. It is copied to `<equipment>/<equipment_dir>/generated/<date>/`, where `equipment_dir` in the radio's profile defaults to the radio id:
 
    ```sh
    fleet publish uv5r-mini
@@ -36,7 +36,7 @@
    uv5r-mini: equipment/uv5r-mini/generated/2026-11-22
    ```
 
-   `equipment` in `fleet.yaml` names the directory, relative to the data root, and the directory must exist. `fleet publish` never overwrites a file: if that date's directory exists, it refuses. Remove or rename the old directory yourself if you want to publish again on the same day.
+   `equipment` in `fleet.yaml` names the directory, relative to the data root, and the directory must exist. Give a radio `equipment_dir`, such as `equipment_dir: baofeng/uv5r-mini`, to publish into a directory of your own layout inside it. `fleet publish` never overwrites a file: if that date's directory exists, it refuses. Remove or rename the old directory yourself if you want to publish again on the same day.
 
 5. Write the published file to the radio with the radio's software (qdmr, CHIRP, ADMS, jayt or the Hytera tool). See [Build and import per radio family](build-and-import.md).
 
@@ -47,7 +47,7 @@
    ```
 
    ```text
-   uv5r-mini: sha256:93ecc57271df88a604de9204267f089abbdc6ca00c86ce4431e6d6e3fc7451d5 in applied.yaml
+   uv5r-mini: sha256:e8f516c8a8abb6fb1de61820636b4d5cfc5afef604087a511144f4199889b6c1 in applied.yaml
    git tag applied/uv5r-mini/2026-11-22
    ```
 

@@ -50,9 +50,10 @@ Your real radios and lists go in a data root of your own, not in this repository
 2. the environment variable `FLEET_DATA`
 3. the current directory
 
-`--data` is an option of each command, so it comes after the command name:
+`--data` goes before or after the command name:
 
 ```sh
+fleet --data ~/my-fleet-data select --radio uv5r-mini
 fleet select --data ~/my-fleet-data --radio uv5r-mini
 ```
 

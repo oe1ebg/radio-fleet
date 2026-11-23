@@ -17,7 +17,7 @@ Paths in the file are relative to the data root, also when `--fleet` names a fil
 | `sources` | list of strings | yes | The memory-channels-processor sources, at least one, such as `oevsv-repeater-db`. Each one has a snapshot `snapshots/<source>.csv`. |
 | `radios` | mapping | yes | One profile per radio. The key is the radio id. |
 | `tools` | mapping | no | `jayt` and `hytera`. |
-| `equipment` | string | no | The directory that `fleet publish` copies to. `fleet publish` needs it. |
+| `equipment` | string | no | The directory that `fleet publish` copies to, as `<equipment>/<equipment_dir>/generated/<date>/`. `fleet publish` needs it, and it must exist. |
 
 ## `tools`
 
@@ -45,7 +45,9 @@ The Hytera command lines run in the data root. A placeholder can be a whole argu
 | `dmr_template` | string | no | The template of `sources/dmr_templates.yaml` for every upstream DMR repeater. Default: none. |
 | `dmr_templates` | mapping | no | Other templates by callsign or callsign prefix, such as `{XX1BB: local, XX3: south}`. The longest key that a callsign starts with wins over `dmr_template`. Default: none. |
 | `zones` | list | no | Zone rules. Default: none. |
-| `scan_lists` | list | qdmr | Scan-list rules. Default: none. Only the `qdmr` renderer takes them. |
+| `scan_lists` | list | no | Scan-list rules. Default: none. Only the `qdmr` and `chirp` renderers take them. |
+| `step` | number, kHz | no | The CHIRP tuning step (`TStep`) of a channel that sets none: 1, 2.5, 5, 6.25, 9, 10, 12.5, 15, 20, 25, 30, 50, 100, 125 or 200. Default: 12.5. Only the `chirp` renderer takes it. See [Renderers](#renderers). |
+| `equipment_dir` | string | no | The radio's directory inside `equipment`, such as `anytone/d878uv2plus`, for `fleet publish`. A relative path without `..`. Default: the radio id. |
 | `power` | string | no | The power of every channel that sets none: a level or watts. See [`power`](#power). |
 | `power_levels` | mapping | no | The watts, or the radio's value, of each power level. The `chirp` renderer needs it for every level its channels have, and `jayt` for `Mid`. See [`power`](#power). |
 | `power_range` | mapping | no | `{min, max, step}` in watts, for a radio that sets watts in steps. No renderer writes it yet. See [`power`](#power). |
@@ -109,7 +111,7 @@ The region applies to upstream channels only, before overrides and the DMR templ
 
 ### `zones` and `scan_lists`
 
-Two lists of rules. Each rule of `zones` makes one zone (one bank on the FT5D), each rule of `scan_lists` one scan list, in list order. Both take the same keys.
+Two lists of rules. Each rule of `zones` makes one zone (one bank on the FT5D), each rule of `scan_lists` one scan list, in list order. Both take the same keys. CHIRP has one scan for the whole radio: on a `chirp` profile, a channel that no scan-list rule takes is skipped (`Skip` `S`).
 
 | Key | Type | Meaning |
 |---|---|---|
@@ -171,12 +173,12 @@ When the radio's watts differ from the watts a channel asks for, the selection r
 A request that the profile cannot resolve is an error that names the profile:
 
 - `fleet.yaml` is refused when a value is not one of the renderer's, naming the key, such as `radios.uv5r-mini.power_levels.Low: the chirp renderer takes the power as watts, such as 5W, not 'High'`, and when the profile's own `power` has no value: `radios.d878uv2plus.power: no level with watts for the power 5W in power_levels`.
-- A channel whose level has no value, or whose watts find no level with watts, fails `fleet select` and `fleet build`, naming the profile, the channel and its own list or source: `radios.uv5r-mini.power_levels: no value for the power Mid of channel 'Hill 2m' from hills`, `radios.d878uv2plus.power_levels: no level with watts for the power 5W of channel 'Hill 2m' from hills`.
+- A channel whose level has no value, or whose watts find no level with watts, fails `fleet select` and `fleet build`, naming the profile, the channel and where its power comes from: the own list's file, the override, or the DMR template. For example `fleet.yaml: radios.uv5r-mini.power_levels: no value for the power Mid of channel 'Hill 2m' from the own list sources/own/hills.yaml`, or `fleet.yaml: radios.d878uv2plus.power_levels: no level with watts for the power 5W of channel 'XX1AA' from the override sources/overrides.yaml: overrides[0]`.
 
 Profiles and lists from before the levels build unchanged:
 
 - A `chirp` profile without `power_levels` writes the watts of a channel, or of its `power`, such as `power: 5W`, as they are. A level on such a profile fails, as above.
-- A `power` that is neither a level nor watts, such as `power: LOW2` for `jayt`, is the radio's value of every channel. Such a profile takes no `power_levels`, and a channel that sets its own power fails `fleet select` and `fleet build`: `radios.ft3185.power: 'LOW2' is the power of every channel, but channel 'Hill 2m' from hills sets the power Low; make power a level or watts and map the levels in power_levels`.
+- A `power` that is neither a level nor watts, such as `power: LOW2` for `jayt`, is the radio's value of every channel. Such a profile takes no `power_levels`, and a channel that sets its own power fails `fleet select` and `fleet build`: `fleet.yaml: radios.ft3185.power: 'LOW2' is the power of every channel, but channel 'Hill 2m' from the own list sources/own/hills.yaml sets the power Low; make power a level or watts and map the levels in power_levels`.
 
 ### `naming`
 
@@ -196,9 +198,15 @@ naming:
 | Renderer | Carries | Needs | Uses zones | Uses scan lists | Receive-only channels |
 |---|---|---|---|---|---|
 | `qdmr` | FM, DMR | `base`, `dmrconf_radio`, dmrconf | yes, as qdmr zones | yes, as qdmr scan lists; each generated channel refers to the first one that takes it | `rxOnly: true` |
-| `chirp` | FM | `power` in watts, or `power` and `power_levels` in watts | no | no | `Duplex` `off` |
+| `chirp` | FM | `power` in watts, or `power` and `power_levels` in watts | no | yes, as `Skip`: a channel that no scan list takes is skipped | `Duplex` `off` |
 | `ft5d` | FM, C4FM | memory-channels-processor (installed with radio-fleet) | yes, as banks 1 to 24 | no | dropped |
 | `jayt` | FM, FT-3185 only | `base`, `tools.jayt` | no | no | dropped |
 | `hytera` | FM, DMR | `base`, `factory`, `tools.hytera` | yes | no | dropped |
+
+The `chirp` renderer fills three more columns:
+
+- `TStep`: the channel's `step`; else the profile's `step` when the RX frequency and the offset are on it; else the coarsest of 12.5, 6.25, 5 and 2.5 kHz they are on. A channel off its own `step` fails the build.
+- `Skip`: `S` for a channel with `skip: true`, empty for one with `skip: false`; else, when the profile has `scan_lists`, `S` for a channel that no scan list takes.
+- `Comment`: the channel's `note`, else the site of an upstream channel (the snapshot's `name` column), else empty.
 
 A channel of a mode that the renderer does not carry fails the build. Keep `capability.modes` within the renderer's modes, so that selection drops such channels instead.
