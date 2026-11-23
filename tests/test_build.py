@@ -84,11 +84,15 @@ def test_a_power_the_profile_cannot_resolve_fails_with_the_profile(
 @pytest.mark.parametrize(
     ("file", "change", "origin"),
     [
-        ("sources/own/simplex.yaml", ("rx: 145.500, mode: FM}", "rx: 145.500, mode: FM, power: 5W}"), "the own list"),
+        (
+            "sources/own/simplex.yaml",
+            ("rx: 145.500, mode: FM}", "rx: 145.500, mode: FM, power: 5W}"),
+            "the own list {path}",
+        ),
         (
             "sources/overrides.yaml",
             ("overrides: []", "overrides: [{callsign: XX1AA, reason: synthetic, set: {power: 5W}}]"),
-            "the override",
+            "oevsv-repeater-db",
         ),
     ],
 )
@@ -103,7 +107,7 @@ def test_a_channel_power_the_qdmr_profile_cannot_resolve_names_the_profile_and_t
     assert error.startswith(
         f"fleet build: {data / 'fleet.yaml'}: radios.d878uv2plus.power_levels: no level with watts for the power 5W"
     )
-    assert f"from {origin} {path}" in error
+    assert f"from {origin.format(path=path)}" in error
     assert "bases/" not in error
 
 

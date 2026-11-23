@@ -9,7 +9,7 @@ from dataclasses import dataclass, replace
 from radio_fleet import geo
 from radio_fleet.config import ConfigError
 from radio_fleet.fleet import RX_ONLY_RENDERERS, Capability, DistanceRegion, GroupRule, Radio, Region
-from radio_fleet.model import Channel, Mode, Power, Watts
+from radio_fleet.model import Channel, Power, Watts
 from radio_fleet.power import PowerError
 from radio_fleet.sources import (
     AppliedOverride,
@@ -89,11 +89,10 @@ def select(radio: Radio, upstream: Sequence[Channel], sources: Sources) -> Selec
         for name in radio.own_lists
         for channel in sources.own_lists[name].channels
     ]
-    upstream_origins = [(channel, _power_origin(radio, channel, band_name(channel), applied)) for channel in regional]
 
     kept: list[Channel] = []
     notes = _default_power_note(radio)
-    for channel, origin in [*own, *upstream_origins]:
+    for channel, origin in [*own, *((channel, channel.source) for channel in regional)]:
         reason = _unfit(radio, channel)
         if reason is None and len(kept) == capability.channels:
             reason = f"channel limit of {capability.channels} reached"
@@ -128,20 +127,6 @@ def _outside(region: Region, channel: Channel) -> str | None:
 def _upstream_named(radio: Radio, channel: Channel, band: str | None) -> Channel:
     name = radio.upstream_name.format(callsign=channel.callsign or "", band=band or "", site=channel.site or "")
     return replace(channel, name=" ".join(name.split()) or channel.name)
-
-
-def _power_origin(radio: Radio, channel: Channel, band: str | None, applied: Sequence[AppliedOverride]) -> str:
-    """Where an upstream channel's own power comes from: the last override that sets it, else its DMR template."""
-    for change in reversed(applied):
-        override = change.override
-        if (change.channel, change.mode, change.band) != (channel.callsign, channel.mode, band):
-            continue
-        if "power" in override.changes:
-            return f"the override {override.place}"
-        if "power" in override.clear:
-            break
-    template = radio.template_for(channel.callsign) if channel.mode is Mode.DMR else None
-    return f"the DMR template {template!r}" if template is not None else channel.source
 
 
 def _unfit(radio: Radio, channel: Channel) -> str | None:

@@ -173,7 +173,7 @@ When the radio's watts differ from the watts a channel asks for, the selection r
 A request that the profile cannot resolve is an error that names the profile:
 
 - `fleet.yaml` is refused when a value is not one of the renderer's, naming the key, such as `radios.uv5r-mini.power_levels.Low: the chirp renderer takes the power as watts, such as 5W, not 'High'`, and when the profile's own `power` has no value: `radios.d878uv2plus.power: no level with watts for the power 5W in power_levels`.
-- A channel whose level has no value, or whose watts find no level with watts, fails `fleet select` and `fleet build`, naming the profile, the channel and where its power comes from: the own list's file, the override, or the DMR template. For example `fleet.yaml: radios.uv5r-mini.power_levels: no value for the power Mid of channel 'Hill 2m' from the own list sources/own/hills.yaml`, or `fleet.yaml: radios.d878uv2plus.power_levels: no level with watts for the power 5W of channel 'XX1AA' from the override sources/overrides.yaml: overrides[0]`.
+- A channel whose level has no value, or whose watts find no level with watts, fails `fleet select` and `fleet build`, naming the profile, the channel and where the channel comes from: the own list's file, or the upstream source id. For example `fleet.yaml: radios.uv5r-mini.power_levels: no value for the power Mid of channel 'Hill 2m' from the own list sources/own/hills.yaml`, or `fleet.yaml: radios.d878uv2plus.power_levels: no level with watts for the power 5W of channel 'XX1AA' from oevsv-repeater-db`.
 
 Profiles and lists from before the levels build unchanged:
 

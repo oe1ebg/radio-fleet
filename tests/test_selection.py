@@ -402,8 +402,8 @@ def test_a_power_level_the_profile_does_not_map_fails_with_the_profile_and_the_l
     the_fleet, own = step(tmp_path, STEP.replace("    power: High\n    power_levels: {High: 5W, Low: 1W}\n", ""))
     with pytest.raises(
         ConfigError,
-        match=r"fleet\.yaml: radios\.chirp\.power_levels: no value for the power Low of channel 'XX1AB' from the "
-        r"override \S*overrides\.yaml: overrides\[1\]$",
+        match=r"fleet\.yaml: radios\.chirp\.power_levels: no value for the power Low of channel 'XX1AB' from "
+        r"synthetic-db$",
     ):
         select(the_fleet.radios["chirp"], STEP_UPSTREAM, own)
 
@@ -487,7 +487,7 @@ def test_a_power_that_is_a_radio_value_refuses_a_channel_with_its_own_power(
     with pytest.raises(
         ConfigError,
         match=rf"fleet\.yaml: radios\.chirp\.power: '{fixed}' is the power of every channel, but channel 'XX1AB' "
-        r"from the override \S*overrides\.yaml: overrides\[1\] sets the power Low; make power a level or watts",
+        r"from synthetic-db sets the power Low; make power a level or watts",
     ):
         select(the_fleet.radios["chirp"], STEP_UPSTREAM, own)
 
