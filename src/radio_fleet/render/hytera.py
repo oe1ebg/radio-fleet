@@ -19,7 +19,6 @@ from radio_fleet.model import Channel, Ctcss, Mode, Tone
 from radio_fleet.selection import Selection
 from radio_fleet.sources import Sources
 
-POWERS = ("High", "Middle", "Low")
 _TABLES = ("digital_channels", "analog_channels", "contacts", "rx_groups", "zones")
 _KINDS = {Mode.DMR: "digital", Mode.FM: "analog"}
 
@@ -84,8 +83,6 @@ class _Editor:
             entry.pop(f"{key}_mhz", None)
         settings = entry.setdefault("settings", {})
         if channel.power is not None:
-            if channel.power not in POWERS:
-                raise RenderError(f"channel {channel.name}: power {channel.power!r} is not one of {', '.join(POWERS)}")
             settings["power_level"] = channel.power
         if kind == "analog":
             narrow = channel.bandwidth_hz is not None and channel.bandwidth_hz <= 12_500

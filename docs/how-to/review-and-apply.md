@@ -8,12 +8,12 @@
    fleet build --radio uv5r-mini
    ```
 
-2. Read the radio's section in `build/CHANGES.md`. Check the added, removed and changed channels, the drops and the overrides. The format is in [reference/changes.md](../reference/changes.md).
+2. Read the radio's section in `build/CHANGES.md`. Check the added, removed and changed channels, the drops, the overrides, the overrides that match nothing and the powers set to the nearest value. The format is in [reference/changes.md](../reference/changes.md).
 
    ```markdown
    ## uv5r-mini: Baofeng UV-5R mini (chirp)
 
-   Against the build applied on 2026-11-22: 6 channels, 4 unchanged.
+   Against the build applied on 2026-11-22: 8 channels, 6 unchanged.
 
    ### Added (1)
 
@@ -47,7 +47,7 @@
    ```
 
    ```text
-   uv5r-mini: sha256:2d90061895bed8d3e7885334d39bba4b49964123e67aa1c14fda8d8afdc4c0d7 in applied.yaml
+   uv5r-mini: sha256:93ecc57271df88a604de9204267f089abbdc6ca00c86ce4431e6d6e3fc7451d5 in applied.yaml
    git tag applied/uv5r-mini/2026-11-22
    ```
 

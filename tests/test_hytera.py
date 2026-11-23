@@ -235,7 +235,6 @@ def test_a_member_and_a_tone_the_base_already_has_are_kept() -> None:
 @pytest.mark.parametrize(
     ("channels", "message"),
     [
-        ((Channel("XX0FM", 433_500_000, 433_500_000, Mode.FM, power="5W"),), "power '5W' is not one of High"),
         ((Channel("XX0YS", 433_500_000, 433_500_000, Mode.C4FM),), "Hytera carries FM and DMR, not C4FM"),
         (
             (Channel("XX0FM", 433_500_000, 433_500_000, Mode.FM), Channel("XX0FM", 433_525_000, 433_525_000, Mode.FM)),

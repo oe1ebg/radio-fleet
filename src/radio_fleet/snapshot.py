@@ -128,6 +128,8 @@ def _channel(row: Mapping[str, str], mode: Mode) -> Channel:
         color_code=int(row["dmr_cc"]) if mode is Mode.DMR and row["dmr_cc"] else None,
         source=row["source_id"],
         position=_position(row["lat"], row["long"]),
+        callsign=row["callsign"],
+        site=row["name"] or None,
     )
 
 

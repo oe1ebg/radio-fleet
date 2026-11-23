@@ -15,7 +15,6 @@ from radio_fleet.model import Channel, Ctcss, Dcs, Mode, Tone
 from radio_fleet.selection import Selection
 
 RADIO = "FT-3185"
-POWERS = ("LOW", "LOW2", "LOW3", "HIGH")
 
 
 class RenderError(ValueError):
@@ -52,9 +51,7 @@ def _channel(channel: Channel, slot: int) -> dict[str, Any]:
         **_tone(channel),
     }
     if channel.power is not None:
-        if channel.power.upper() not in POWERS:
-            raise RenderError(f"channel {channel.name}: power {channel.power!r} is not one of {', '.join(POWERS)}")
-        fields["tx_power"] = channel.power.upper()
+        fields["tx_power"] = str(channel.power).upper()
     return fields
 
 

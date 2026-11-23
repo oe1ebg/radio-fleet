@@ -47,14 +47,36 @@ An own list is a YAML file in `sources/own/` of the data root. A radio carries t
 
    The channels of the list show its name as the source: `[hills]`. Own lists come first, in the order of `own_lists`, before the upstream channels.
 
+## Receive-only channels
+
+A channel that the radio must never transmit on, such as PMR446 or Freenet, has `rx_only: true` and no `tx`:
+
+```yaml
+name: listen
+tags: [listen]
+channels:
+  - {name: PMR 1, rx: 446.00625, mode: FM, bandwidth: 12.5, rx_only: true}
+  - {name: Freenet 1, rx: 149.025, mode: FM, bandwidth: 12.5, rx_only: true}
+```
+
+Selection checks only the RX frequency of a receive-only channel against the radio's bands, so it keeps the channel although its frequency is in no TX band. `fleet select` marks it `RX only`. The qdmr renderer writes it with `rxOnly: true` and the CHIRP renderer with `Duplex` `off`; the radio does not transmit on it. The FT5D, jayt and Hytera renderers cannot write such a channel, so selection drops it:
+
+```text
+  PMR 1: receive-only, and the ft5d renderer cannot write a channel that never transmits
+```
+
 ## What to check
 
 - A channel whose mode, RX or TX frequency the radio cannot carry is dropped, with the reason. The region does not apply to own lists.
-- A `power` on a channel wins over the `power` of the profile. Use a value that the radio's renderer takes (see the [fleet.yaml reference](../reference/fleet-yaml.md#power)). If one list feeds radios of different renderers, leave `power` out of the list. Otherwise the build of one of them fails, for example:
+- A `power` on a channel is a level, `Max`, `High`, `Mid`, `Low` or `Min`, or watts, such as `5W` or `0.5W`. It wins over the `power` of the profile, and each radio's profile turns it into the radio's value, such as `1W` on a CHIRP radio and `Low` on a qdmr radio (see the [fleet.yaml reference](../reference/fleet-yaml.md#power)). Watts go to the radio's nearest level, and `fleet select` reports each change, such as `Hill 2m: 3W -> Mid (2W)`. So one list can feed radios of every renderer. If a radio maps no value for the level, or no level to watts, its selection fails and names the profile, the channel and the list:
 
   ```text
-  fleet build: uv5r-mini: channel Hill 2m: CHIRP needs the power in watts, such as 5W, not 'Low'
+  fleet select: radios.uv5r-mini.power_levels: no value for the power Low of channel 'Hill 2m' from hills
   ```
+
+  A profile whose `power` is a radio value, such as `power: LOW2` on a jayt radio, gives no level a value, so a channel with its own power fails its selection: `radios.ft3185.power: 'LOW2' is the power of every channel, but channel 'Hill 2m' from hills sets the power Low; ...`. Make the profile's `power` a level or watts and add `power_levels`.
+
+  A radio value in a list, such as `power: Turbo`, is refused: `sources/own/hills.yaml: channels[0].power: power is a level (Max, High, Mid, Low, Min) or watts, such as 5W, not 'Turbo'`.
 - A DMR channel names its talkgroup and RX group list by name. Define them first: see [Talkgroups and RX group lists](talkgroups.md).
 - The list's `tags` and the channel's `tags` both go to the channel. A zone or scan-list rule can select channels by tag or by `source: hills`.
 

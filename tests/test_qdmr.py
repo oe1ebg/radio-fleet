@@ -102,7 +102,7 @@ def test_scan_lists_take_hand_made_channels_by_name_and_channels_refer_to_their_
     scan_lists = {scan["name"]: [names[i] for i in scan["channels"]] for scan in items(rendered, "scanLists")}
     assert scan_lists == {
         "Hand": ["No"],
-        "FM": ["2m Call", "70cm Call", "XX1AA", "XX1CC", "XX3DD"],
+        "FM": ["2m Call", "70cm Call", "PMR 1", "Freenet 1", "XX1AA", "XX1CC", "XX3DD"],
         "DMR": ["Hotspot", "DMR Simplex", "XX1BB 1 TG232", "XX1BB 2 TG9"],
     }
     zones = {zone["name"]: [names[i] for i in zone["A"]] for zone in items(rendered, "zones")}
@@ -113,6 +113,8 @@ def test_scan_lists_take_hand_made_channels_by_name_and_channels_refer_to_their_
         "Hotspot": None,
         "2m Call": "gen_scan1",
         "70cm Call": "gen_scan1",
+        "PMR 1": "gen_scan1",
+        "Freenet 1": "gen_scan1",
         "DMR Simplex": "gen_scan2",
         "XX1AA": "gen_scan1",
         "XX1BB 1 TG232": "gen_scan2",
@@ -201,7 +203,6 @@ def test_fm_and_dmr_channels_carry_their_fields() -> None:
 @pytest.mark.parametrize(
     ("channel", "message"),
     [
-        (Channel("XX0FM", 145_600_000, 145_000_000, Mode.FM, power="5W"), "power '5W' is not one of Max, High"),
         (Channel("XX0YS", 145_600_000, 145_000_000, Mode.C4FM), "qdmr carries FM and DMR, not C4FM"),
     ],
 )

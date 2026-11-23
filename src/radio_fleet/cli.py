@@ -15,7 +15,7 @@ from radio_fleet.hytera_tool import HyteraCli, HyteraTool
 from radio_fleet.jayt import Jayt, JaytCli
 from radio_fleet.mcp import Fetcher, FetchError, McpCli
 from radio_fleet.model import Channel
-from radio_fleet.record import override_text, tone
+from radio_fleet.record import override_text, tone, unmatched_text
 from radio_fleet.selection import Selection, mhz, select
 
 
@@ -208,6 +208,12 @@ def _print(selection: Selection) -> None:
     print(f"overrides: {len(selection.overrides)}")
     for applied in selection.overrides:
         print(f"  {override_text(applied)}")
+    print(f"overrides that match nothing: {len(selection.unmatched_overrides)}")
+    for override in selection.unmatched_overrides:
+        print(f"  {unmatched_text(override)}")
+    print(f"power set to the nearest value: {len(selection.power_notes)}")
+    for note in selection.power_notes:
+        print(f"  {note}")
 
 
 def _describe(channel: Channel) -> str:
@@ -226,6 +232,8 @@ def _describe(channel: Channel) -> str:
         parts.append(f"RX group {channel.rx_group_list}")
     if channel.power is not None:
         parts.append(f"power {channel.power}")
+    if channel.rx_only:
+        parts.append("RX only")
     parts.append(f"[{channel.source}]")
     return " ".join(parts)
 

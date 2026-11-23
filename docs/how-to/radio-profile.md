@@ -20,7 +20,8 @@ This guide adds a second Retevis RT95 that carries the repeaters within 60 km of
          name_length: 6
        region: {locator: JJ00mm, max_km: 60}
        own_lists: [simplex]
-       power: 25W
+       power: High
+       power_levels: {Max: 25W, High: 25W, Mid: 10W, Low: 5W, Min: 5W}
        naming: {replace: {"Call": "C"}}
    ```
 
@@ -45,6 +46,8 @@ This guide adds a second Retevis RT95 that carries the repeaters within 60 km of
      XX1CC: mode C4FM not supported
      XX3EE: TX 445.00000 MHz outside the TX bands
    overrides: 0
+   overrides that match nothing: 0
+   power set to the nearest value: 0
    ```
 
 3. Read every drop. If a channel is dropped that the radio should carry, change the profile and run `fleet select` again.
@@ -64,7 +67,7 @@ This guide adds a second Retevis RT95 that carries the repeaters within 60 km of
 | Radio family | `renderer` | Also needs |
 |---|---|---|
 | AnyTone (qdmr) | `qdmr` | `base`, `dmrconf_radio` |
-| Baofeng, Retevis (CHIRP) | `chirp` | `power` in watts |
+| Baofeng, Retevis (CHIRP) | `chirp` | `power` and `power_levels` in watts |
 | Yaesu FT5D (ADMS-14) | `ft5d` | nothing |
 | Yaesu FT-3185 (jayt) | `jayt` | `base`, `tools.jayt` |
 | Hytera | `hytera` | `base`, `factory`, `tools.hytera` |
@@ -73,7 +76,7 @@ Put only modes in `capability.modes` that the renderer carries. A channel of a m
 
 ## Capability
 
-- `bands`: each band has an RX range and, for transmit, a TX range, in MHz. A channel is dropped when its RX frequency is in no RX range, or when its TX frequency is in no TX range. Set the TX ranges to the amateur bands you may transmit on.
+- `bands`: each band has an RX range and, for transmit, a TX range, in MHz. A channel is dropped when its RX frequency is in no RX range, or when its TX frequency is in no TX range. Set the TX ranges to the amateur bands you may transmit on. A receive-only channel (`rx_only: true` in an own list) is checked against the RX ranges only; the qdmr and CHIRP renderers write it so that the radio cannot transmit, and the other renderers drop it.
 - `channels`: the memory count. Channels beyond it are dropped with `channel limit of N reached`.
 - `name_length`: names are cut to this length.
 - `zones` and `zone_channels`: the number of zones and the channels per zone. `scan_lists` and `scan_list_channels`: the number of scan lists and the channels per scan list. A limit that you leave out is no limit. Set the radio's limits when the profile has zone or scan-list rules, so that selection drops what the radio cannot hold.
@@ -84,6 +87,19 @@ The region selects upstream channels. It does not apply to own lists. Use one of
 
 - `{locator: JJ00mm, max_km: 60}`: the repeaters within 60 km of the centre of the Maidenhead locator. A repeater without a position in the snapshot is dropped.
 - `{prefixes: [XX1, XX3]}`: the repeaters whose callsign starts with one of the prefixes.
+
+Two optional keys go next to the area:
+
+```yaml
+region:
+  locator: JJ00mm
+  max_km: 60
+  modes: {DMR: {locator: JJ00mm, max_km: 150}}
+  exclude: {XX1CC: "DCS, which the FT5D output cannot carry"}
+```
+
+- `modes` gives some modes another area, here the DMR repeaters within 150 km. A mode that is not named takes the region's area.
+- `exclude` names callsigns that the radio never gets, each with the reason. `fleet select` shows the drop: `XX1CC: excluded: DCS, which the FT5D output cannot carry`.
 
 ## Zones and scan lists
 
@@ -112,19 +128,39 @@ Selection keeps at most `capability.zones` zones and `capability.scan_lists` sca
 
 ## Power
 
-`power` is the power of every channel that does not set its own. Each renderer takes other values:
+A channel asks for a power as a level, `Max`, `High`, `Mid`, `Low` or `Min`, or as watts, such as `5W`. `power` is the power of every channel that does not set its own, and `power_levels` maps each level to watts or to the radio's value:
 
-| Renderer | Values |
-|---|---|
-| `qdmr` | `Max`, `High`, `Mid`, `Low`, `Min` |
-| `chirp` | watts, such as `5W` or `0.5W`; required |
-| `jayt` | `LOW`, `LOW2`, `LOW3`, `HIGH` |
-| `hytera` | `High`, `Middle`, `Low` |
-| `ft5d` | not used |
+```yaml
+power: High
+power_levels: {Max: 25W, High: 25W, Mid: 10W, Low: 5W, Min: 5W}
+```
+
+| Renderer | Values of `power_levels` | Without `power_levels` |
+|---|---|---|
+| `qdmr` | watts, or `Max`, `High`, `Mid`, `Low`, `Min` | each level is its own value |
+| `chirp` | watts, such as `5W` or `0.5W`; every channel needs a power | watts pass as they are; a level has no value |
+| `jayt` | `LOW`, `LOW2`, `LOW3`, `HIGH` | `Max`, `High`: `HIGH`; `Low`, `Min`: `LOW`; `Mid`: no value |
+| `hytera` | watts, or `High`, `Middle`, `Low` | `Max`, `High`: `High`; `Mid`: `Middle`; `Low`, `Min`: `Low` |
+| `ft5d` | none: the FT5D writes no power | |
+
+Watts go to the nearest level that `power_levels` maps to watts, the lower one on a tie: with the map above, `20W` gives `Max` (25W; of two levels with the same watts the higher wins) and `7W` gives `Low` (5W). `fleet select` lists each channel whose watts changed under `power set to the nearest value`, such as `XX1AA: 7W -> Low (5W)`; `build/CHANGES.md` lists them too. A radio that sets watts in steps, such as the Yaesu FTX-1, takes `power_range: {min: 1W, max: 10W, step: 1W}` instead, but no renderer writes a range yet. See the [fleet.yaml reference](../reference/fleet-yaml.md#power).
+
+A value the renderer does not take is refused when `fleet.yaml` is read, with the profile and the key. A level or watts that a channel has and the profile cannot resolve fails the selection, with the profile, the channel and its list. A `power` that is neither a level nor watts, such as `power: LOW2` on a jayt radio, is the radio's value of every channel; a channel that sets its own power then fails the selection. Make `power` a level or watts and add `power_levels` to use levels.
 
 ## Naming
 
-`naming.replace` rewrites parts of the channel names, in order, before the cut to `name_length`. Trailing spaces are removed after the cut.
+`naming.upstream` names the upstream channels. `{callsign}` is the callsign, `{band}` the name of the capability band of the RX frequency and `{site}` the snapshot's `name` column. The default is `{callsign}`. A callsign with a repeater on 2 m and one on 70 cm gives two channels of one name; with `{band}`, they differ:
+
+```yaml
+naming: {upstream: "{callsign} {band}"}
+```
+
+```text
+  XX1AA 2m         RX 145.60000 TX 145.00000 FM ...
+  XX1AA 70cm       RX 438.65000 TX 431.05000 FM ...
+```
+
+`naming.replace` rewrites parts of every channel name, in order, before the cut to `name_length`. Trailing spaces are removed after the cut.
 
 ```yaml
 naming: {replace: {" TS1 ": " 1 ", " TS2 ": " 2 "}}

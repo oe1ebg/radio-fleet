@@ -8,7 +8,7 @@ import pytest
 
 from radio_fleet import fleet
 from radio_fleet.cli import main
-from radio_fleet.fleet import PrefixRegion, Radio
+from radio_fleet.fleet import PrefixRegion, Radio, Region
 from radio_fleet.model import Channel, Ctcss, Dcs, Mode, Tone
 from radio_fleet.render import chirp
 from radio_fleet.render.csvcheck import CsvCheckError
@@ -51,7 +51,7 @@ def test_repeater_simplex_ctcss_and_dcs_channels_give_the_expected_rows() -> Non
         fm("XX0SX", 145_500_000, 145_500_000, bandwidth_hz=25_000),
         fm("XX0RP", 145_612_500, 145_012_500, tone_tx=Ctcss(88.5), bandwidth_hz=12_500),
         fm("XX0UP", 438_962_500, 431_362_500, tone_tx=Ctcss(123.0), tone_rx=Ctcss(123.0), power="0.5W"),
-        fm("XX0DC", 433_600_000, 433_600_000, tone_tx=Dcs(23), tone_rx=Dcs(23), power="2 W"),
+        fm("XX0DC", 433_600_000, 433_600_000, tone_tx=Dcs(23), tone_rx=Dcs(23), power="2W"),
         fm("XX0MI", 431_037_500, 438_637_500),
     ) == [
         "1,XX0SX,145.500000,,0.000000,,88.5,88.5,023,NN,023,Tone->Tone,FM,12.50,,5.0W,synthetic,,,,",
@@ -88,10 +88,13 @@ def test_the_memory_limit_drops_channels_with_a_reason() -> None:
     small = replace(
         radio(),
         capability=replace(radio().capability, channels=2),
-        region=PrefixRegion(("XX0",)),
+        region=Region(PrefixRegion(("XX0",)), {}, {}),
         own_lists=(),
     )
-    upstream = [fm(f"XX0A{i}", 145_500_000 + i * 12_500, 145_500_000 + i * 12_500) for i in range(3)]
+    upstream = [
+        replace(fm(f"XX0A{i}", 145_500_000 + i * 12_500, 145_500_000 + i * 12_500, power=None), callsign=f"XX0A{i}")
+        for i in range(3)
+    ]
     selection = select(small, upstream, Sources(EXAMPLES / "sources", {}, {}, {}, (), {}))
     assert selection.drops == (Drop("XX0A2", "channel limit of 2 reached"),)
     text = chirp.render(selection)
@@ -102,9 +105,8 @@ def test_the_memory_limit_drops_channels_with_a_reason() -> None:
 @pytest.mark.parametrize(
     ("channel", "message"),
     [
-        (Channel("XX0DM", 438_962_500, 431_462_500, Mode.DMR, power="5W"), "carries FM, not DMR"),
-        (fm("XX0FM", 145_500_000, 145_500_000, power="High"), "power in watts, such as 5W, not 'High'"),
-        (fm("XX0FM", 145_500_000, 145_500_000, power=None), "power in watts, such as 5W, not None"),
+        (Channel("XX0DM", 438_962_500, 431_462_500, Mode.DMR), "carries FM, not DMR"),
+        (fm("XX0FM", 145_500_000, 145_500_000, power=None), "CHIRP needs a power: give the profile a power level"),
         (fm("XX0FM", 145_501_000, 145_501_000), r"RX 145.501000 MHz is on no CHIRP tuning step"),
     ],
 )
@@ -142,14 +144,32 @@ def test_build_writes_the_checked_chirp_csv(tmp_path: Path, capsys: pytest.Captu
     )
 
 
+def test_a_data_root_with_watts_per_channel_builds_unchanged(tmp_path: Path) -> None:
+    data = tmp_path / "data"
+    shutil.copytree(EXAMPLES, data)
+    levels = "{Max: 5W, High: 5W, Mid: 2W, Low: 1W, Min: 0.5W}"
+    fleet_file = data / "fleet.yaml"
+    text = fleet_file.read_text()
+    old_profile = f"    power: High\n    power_levels: &baofeng_power {levels}\n"
+    assert old_profile in text
+    text = text.replace(old_profile, "    power: 5W\n")
+    fleet_file.write_text(text.replace("*baofeng_power", levels))
+    simplex = data / "sources" / "own" / "simplex.yaml"
+    simplex.write_text(simplex.read_text().replace("rx: 145.500, mode: FM}", "rx: 145.500, mode: FM, power: 2W}"))
+    assert main(["build", "--data", str(data), "--radio", "uv5r-mini"]) == 0
+    rows = (data / "build" / "uv5r-mini" / "uv5r-mini.csv").read_text(encoding="utf-8").splitlines()[1:]
+    assert [row.split(",")[15] for row in rows[:2]] == ["2.0W", "5.0W"]
+
+
 def test_a_chirp_render_error_fails_the_build_and_names_the_radio(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     data = tmp_path / "data"
     shutil.copytree(EXAMPLES, data)
     fleet_file = data / "fleet.yaml"
-    fleet_file.write_text(fleet_file.read_text().replace("power: 5W", "power: High"))
+    fleet_file.write_text(fleet_file.read_text().replace("power: High\n    power_levels: &", "power_levels: &"))
     assert main(["build", "--data", str(data), "--radio", "uv5r-mini"]) == 1
     assert capsys.readouterr().err == (
-        "fleet build: uv5r-mini: channel 2m Call: CHIRP needs the power in watts, such as 5W, not 'High'\n"
+        "fleet build: uv5r-mini: channel 2m Call: CHIRP needs a power: give the profile a power level and its "
+        "watts, such as power: High and power_levels: {High: 5W}\n"
     )

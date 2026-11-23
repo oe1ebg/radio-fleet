@@ -18,6 +18,8 @@ Each radio's build in `build/` against its last applied build in `applied.yaml`.
 ### Changed (<n>)
 ### Drops (<n>)
 ### Overrides (<n>)
+### Overrides that match nothing (<n>)
+### Power set to the nearest value (<n>)
 ```
 
 There is one `##` section per radio of `fleet.yaml`, in the order of the file. A list with no items says `None.`.
@@ -39,7 +41,9 @@ There is one `##` section per radio of `fleet.yaml`, in the order of the file. A
 | Removed | `<label>: <field> <value>, ...`: a channel of the applied build that the build does not have |
 | Changed | `<label>: <field> <before> -> <after>; ...`: only the fields that differ; `-` stands for a field the channel does not have |
 | Drops | `<name>: <reason>`: each channel, zone and scan list that the selection dropped |
-| Overrides | `<callsign> <mode>: <field>=<value>, ... (<reason>)`: each override that the build applied |
+| Overrides | `<callsign> <mode> <band>: <field>=<value>, ... (<reason>)`: each override that the build applied, once per channel it changed; a cleared field shows as `<field>=-` |
+| Overrides that match nothing | `<callsign> [<mode>] [<band>]: <field>=<value>, ... (<reason>)`: each override for the radio that matches no upstream channel, with the mode and band it names |
+| Power set to the nearest value | `<name>: <watts> -> <level> (<watts>)` or `<name>: <watts> -> <watts>`: each channel whose watts the radio sets to another value, such as `XX1AA: 25W -> Max (5W)`; the profile's own `power` is reported once as `power of the profile: ...` |
 
 Example:
 
@@ -50,12 +54,16 @@ Example:
 
 ### Overrides (1)
 
-- XX3DD FM: tone_rx=CTCSS 123 (the repeater also uses the tone for squelch)
+- XX3DD FM 2m: tone_rx=CTCSS 123 (the repeater also uses the tone for squelch)
+
+### Overrides that match nothing (1)
+
+- XX9ZZ FM: tone_tx=- (the repeater stopped sending a tone)
 ```
 
 ## How channels are matched
 
-- The compared fields are `rx`, `tx`, `mode`, `tone_tx`, `tone_rx`, `bandwidth`, `color_code`, `time_slot`, `tx_talkgroup`, `rx_group_list` and `power`. Tags and sources are not compared.
+- The compared fields are `rx`, `tx`, `mode`, `tone_tx`, `tone_rx`, `bandwidth`, `color_code`, `time_slot`, `tx_talkgroup`, `rx_group_list`, `power` (the radio's value, such as `5W`) and `rx_only`. Tags and sources are not compared.
 - A channel is matched by its name. Then a change of mode is a change, such as `mode FM -> C4FM`.
 - A name that occurs more than once, in the build or in the applied build, is matched by name and mode. Its label is `<name> [<mode>]`, such as `XX1CC [FM]`. If the name and mode also repeat, the label counts them: `<name> [<mode> #2]`.
 - A renamed channel shows as one removed and one added channel.

@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+import string
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from fnmatch import fnmatchcase
 from pathlib import Path
+from typing import Literal, get_args
 
-from radio_fleet import config, geo, hytera_tool
+from radio_fleet import config, geo, hytera_tool, power
 from radio_fleet.config import ConfigError, Node
-from radio_fleet.model import Channel, Mode, Position
+from radio_fleet.model import Channel, Mode, Position, Power, Watts
+from radio_fleet.power import PowerError, PowerRange, RadioPower
 from radio_fleet.sources import MHZ, Sources, dmr_templates_path, own_list_path
 
 
@@ -21,6 +24,56 @@ class Renderer(StrEnum):
     FT5D = "ft5d"
     JAYT = "jayt"
     HYTERA = "hytera"
+
+
+RX_ONLY_RENDERERS = frozenset({Renderer.QDMR, Renderer.CHIRP})
+"""The renderers that can write a receive-only channel; the others drop it."""
+
+
+@dataclass(frozen=True, slots=True)
+class _PowerValues:
+    """The power values a renderer writes. `defaults` maps the levels the profile leaves out, and `of_watts`
+    gives a level that `power_levels` maps to watts its value; None where the renderer has no such value."""
+
+    text: str
+    valid: Callable[[str], bool]
+    defaults: Mapping[Power, str]
+    of_watts: Callable[[Power, Watts], str] | None
+
+
+def _names(values: tuple[str, ...]) -> str:
+    return f"{', '.join(values[:-1])} or {values[-1]}"
+
+
+_JaytPower = Literal["LOW", "LOW2", "LOW3", "HIGH"]
+_JAYT_POWERS: tuple[_JaytPower, ...] = get_args(_JaytPower)
+_JAYT_LEVELS: Mapping[Power, _JaytPower] = {Power.MAX: "HIGH", Power.HIGH: "HIGH", Power.LOW: "LOW", Power.MIN: "LOW"}
+_HyteraPower = Literal["High", "Middle", "Low"]
+_HYTERA_POWERS: tuple[_HyteraPower, ...] = get_args(_HyteraPower)
+_HYTERA_LEVELS: Mapping[Power, _HyteraPower] = {
+    Power.MAX: "High",
+    Power.HIGH: "High",
+    Power.MID: "Middle",
+    Power.LOW: "Low",
+    Power.MIN: "Low",
+}
+_POWER_VALUES: Mapping[Renderer, _PowerValues] = {
+    Renderer.QDMR: _PowerValues(
+        _names(tuple(Power)),
+        lambda value: value in tuple(Power),
+        {level: level.value for level in Power},
+        lambda level, _: level.value,
+    ),
+    Renderer.CHIRP: _PowerValues("watts, such as 5W", lambda _: False, {}, lambda _, watts: str(watts)),
+    Renderer.JAYT: _PowerValues(_names(_JAYT_POWERS), lambda value: value.upper() in _JAYT_POWERS, _JAYT_LEVELS, None),
+    Renderer.HYTERA: _PowerValues(
+        _names(_HYTERA_POWERS),
+        lambda value: value in _HYTERA_POWERS,
+        _HYTERA_LEVELS,
+        lambda level, _: _HYTERA_LEVELS[level],
+    ),
+}
+_WATTS_RENDERERS = frozenset({Renderer.CHIRP})
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,7 +120,20 @@ class PrefixRegion:
     prefixes: tuple[str, ...]
 
 
-Region = DistanceRegion | PrefixRegion
+Area = DistanceRegion | PrefixRegion
+
+
+@dataclass(frozen=True, slots=True)
+class Region:
+    """The area of the upstream channels a radio gets, another area for some modes, and the callsigns it
+    never gets, each with the reason."""
+
+    area: Area
+    modes: Mapping[Mode, Area]
+    exclude: Mapping[str, str]
+
+    def area_of(self, mode: Mode) -> Area:
+        return self.modes.get(mode, self.area)
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,10 +174,19 @@ class Radio:
     region: Region
     own_lists: tuple[str, ...]
     dmr_template: str | None
+    dmr_templates: Mapping[str, str]
+    """Templates by callsign or callsign prefix; the longest key a callsign starts with wins."""
     zones: tuple[GroupRule, ...]
     scan_lists: tuple[GroupRule, ...]
-    power: str | None
+    power: RadioPower | None
+    """None for a renderer that writes no power."""
+    upstream_name: str
+    """The name of an upstream channel, a format with the fields callsign, band and site."""
     name_replacements: tuple[tuple[str, str], ...]
+
+    def template_for(self, callsign: str | None) -> str | None:
+        keys = [key for key in self.dmr_templates if callsign is not None and callsign.startswith(key)]
+        return self.dmr_templates[max(keys, key=len)] if keys else self.dmr_template
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,12 +223,19 @@ class Fleet:
                 if name not in sources.own_lists:
                     path = own_list_path(sources.directory, name)
                     raise ConfigError(f"{place}.own_lists: no own list {name!r}: no file {path}")
-            if radio.dmr_template is not None and radio.dmr_template not in sources.dmr_templates:
-                path = dmr_templates_path(sources.directory)
-                raise ConfigError(f"{place}.dmr_template: no template {radio.dmr_template!r} in {path}")
+            templates = [("dmr_template", radio.dmr_template)]
+            templates += [(f"dmr_templates.{key}", name) for key, name in radio.dmr_templates.items()]
+            for key, template in templates:
+                if template is not None and template not in sources.dmr_templates:
+                    path = dmr_templates_path(sources.directory)
+                    raise ConfigError(f"{place}.{key}: no template {template!r} in {path}")
             for key, file in (("base", radio.base), ("factory", radio.factory)):
                 if file is not None and not file.is_file():
                     raise ConfigError(f"{place}.{key}: no file {file}")
+        for override in sources.overrides:
+            unknown = [radio_id for radio_id in override.radios if radio_id not in self.radios]
+            if unknown:
+                raise ConfigError(f"{override.place}.radios: no radio {unknown[0]!r} in {self.file}")
 
 
 def load(path: Path, data_root: Path) -> Fleet:
@@ -201,7 +283,20 @@ def _command(node: Node, command: str) -> tuple[str, ...]:
 def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
     fields = node.fields(
         ["model", "renderer", "capability", "region"],
-        ["base", "dmrconf_radio", "factory", "own_lists", "dmr_template", "zones", "scan_lists", "power", "naming"],
+        [
+            "base",
+            "dmrconf_radio",
+            "factory",
+            "own_lists",
+            "dmr_template",
+            "dmr_templates",
+            "zones",
+            "scan_lists",
+            "power",
+            "power_levels",
+            "power_range",
+            "naming",
+        ],
     )
     capability = _capability(fields["capability"])
     try:
@@ -218,6 +313,11 @@ def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
         key: tuple(_group_rule(item, capability, renderer) for item in fields[key].items()) if key in fields else ()
         for key in ("zones", "scan_lists")
     }
+    radio_power = _power(renderer, fields.get("power"), fields.get("power_levels"), fields.get("power_range"))
+    if "power_range" in fields:
+        raise fields["power_range"].error(f"the {renderer} renderer writes no stepped power range yet")
+    upstream_name, replacements = _naming(fields["naming"]) if "naming" in fields else (_UPSTREAM_NAME, ())
+    templates = fields["dmr_templates"].entries() if "dmr_templates" in fields else {}
     return Radio(
         id=radio_id,
         model=fields["model"].text(),
@@ -229,11 +329,74 @@ def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
         region=_region(fields["region"]),
         own_lists=fields["own_lists"].texts() if "own_lists" in fields else (),
         dmr_template=fields["dmr_template"].text() if "dmr_template" in fields else None,
+        dmr_templates={key: node.text() for key, node in templates.items()},
         zones=rules["zones"],
         scan_lists=rules["scan_lists"],
-        power=fields["power"].text() if "power" in fields else None,
-        name_replacements=_naming(fields["naming"]) if "naming" in fields else (),
+        power=radio_power,
+        upstream_name=upstream_name,
+        name_replacements=replacements,
     )
+
+
+def _power(renderer: Renderer, default: Node | None, levels: Node | None, stepped: Node | None) -> RadioPower | None:
+    """A `power` that is neither a level nor watts is the radio's value of every channel, as `power` was before
+    levels and watts; such a profile takes no `power_levels`."""
+    request = power.parse(default.text()) if default is not None else None
+    values = _POWER_VALUES.get(renderer)
+    if values is None:
+        for node in (default if request is None else None, levels, stepped):
+            if node is not None:
+                raise node.error(f"the {renderer} renderer writes no power; power takes only a level or watts")
+        return None
+    if default is not None and request is None:
+        if levels is not None or stepped is not None:
+            raise default.error(f"power is a level ({', '.join(Power)}) or watts, such as 5W")
+        if not values.valid(default.text()):
+            raise default.error(f"the {renderer} renderer takes the power as {values.text}, not {default.value!r}")
+        return RadioPower(fixed=default.text())
+    power_range = _power_range(stepped) if stepped is not None else None
+    mapped = {} if power_range is not None else dict(values.defaults)
+    watts: dict[Power, Watts] = {}
+    for name, node in (levels.entries() if levels is not None else {}).items():
+        level = power.parse(name)
+        if not isinstance(level, Power):
+            raise node.error(f"power levels are {', '.join(Power)}")
+        value = node.value if isinstance(node.value, str) else ""
+        parsed = power.parse(value)
+        if isinstance(parsed, Watts) and (power_range is not None or values.of_watts is not None):
+            if power_range is not None and not power_range.allows(parsed):
+                raise node.error(f"{parsed} is not a step of power_range")
+            watts[level] = parsed
+            mapped[level] = str(parsed) if values.of_watts is None else values.of_watts(level, parsed)
+        elif power_range is None and values.valid(value):
+            mapped[level] = value
+        else:
+            expected = "watts" if power_range is not None else values.text
+            raise node.error(f"the {renderer} renderer takes the power as {expected}, not {node.value!r}")
+    radio_power = RadioPower(request, mapped, watts, power_range, watts_native=renderer in _WATTS_RENDERERS)
+    if default is not None and request is not None:
+        try:
+            radio_power.resolve(request)
+        except PowerError as error:
+            raise default.error(f"{error} in power_levels") from None
+    return radio_power
+
+
+def _power_range(node: Node) -> PowerRange:
+    fields = node.fields(["min", "max", "step"])
+    low, high, step = (_watts(fields[key]) for key in ("min", "max", "step"))
+    if step.value <= 0 or low >= high:
+        raise node.error("expected min below max and a step above 0W")
+    if (high.value - low.value) % step.value != 0:
+        raise fields["max"].error(f"{high} is not {low} plus whole steps of {step}")
+    return PowerRange(low, high, step)
+
+
+def _watts(node: Node) -> Watts:
+    parsed = power.parse(node.value if isinstance(node.value, str) else "")
+    if not isinstance(parsed, Watts):
+        raise node.error(f"expected watts, such as 5W, not {node.value!r}")
+    return parsed
 
 
 def _capability(node: Node) -> Capability:
@@ -280,8 +443,27 @@ def _range(node: Node) -> tuple[int, int]:
     return low, high
 
 
+_AREA_KEYS = ("locator", "max_km", "prefixes")
+
+
 def _region(node: Node) -> Region:
-    fields = node.fields((), ["locator", "max_km", "prefixes"])
+    fields = node.fields((), [*_AREA_KEYS, "modes", "exclude"])
+    modes: dict[Mode, Area] = {}
+    for name, area in (fields["modes"].entries() if "modes" in fields else {}).items():
+        try:
+            mode = Mode(name)
+        except ValueError:
+            raise area.error(f"modes are {', '.join(Mode)}") from None
+        modes[mode] = _area(area, area.fields((), _AREA_KEYS))
+    exclude = fields["exclude"].entries() if "exclude" in fields else {}
+    return Region(
+        area=_area(node, {key: value for key, value in fields.items() if key in _AREA_KEYS}),
+        modes=modes,
+        exclude={callsign: reason.text() for callsign, reason in exclude.items()},
+    )
+
+
+def _area(node: Node, fields: Mapping[str, Node]) -> Area:
     if "prefixes" in fields and len(fields) == 1:
         return PrefixRegion(fields["prefixes"].texts())
     if set(fields) == {"locator", "max_km"}:
@@ -328,11 +510,26 @@ def _modes(node: Node) -> list[Mode]:
         raise node.error(f"modes are {', '.join(Mode)}") from None
 
 
-def _naming(node: Node) -> tuple[tuple[str, str], ...]:
-    """`replace: {old: new}` rewrites channel names in order before they are cut to the name length."""
+_UPSTREAM_NAME = "{callsign}"
+_NAME_FIELDS = ("callsign", "band", "site")
+
+
+def _naming(node: Node) -> tuple[str, tuple[tuple[str, str], ...]]:
+    """`upstream` is the name of an upstream channel; `replace: {old: new}` rewrites every channel name in
+    order before it is cut to the name length."""
+    fields = node.fields((), ["upstream", "replace"])
+    upstream = fields["upstream"].text() if "upstream" in fields else _UPSTREAM_NAME
+    try:
+        parsed = list(string.Formatter().parse(upstream))
+    except ValueError as error:
+        raise fields["upstream"].error(str(error)) from None
+    for _, field, spec, conversion in parsed:
+        if field is not None and (field not in _NAME_FIELDS or spec or conversion):
+            fields_text = ", ".join(f"{{{name}}}" for name in _NAME_FIELDS)
+            raise fields["upstream"].error(f"a name takes only the fields {fields_text}, not {{{field}}}")
     pairs: list[tuple[str, str]] = []
-    for old, new in node.fields(["replace"])["replace"].entries().items():
+    for old, new in (fields["replace"].entries() if "replace" in fields else {}).items():
         if not isinstance(new.value, str):
             raise new.error("expected a string")
         pairs.append((old, new.value))
-    return tuple(pairs)
+    return upstream, tuple(pairs)

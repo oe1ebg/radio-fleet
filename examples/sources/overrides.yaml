@@ -1,9 +1,14 @@
-# Changes to upstream channels, matched by callsign, of every mode or only of `mode`.
-# Every override needs a reason. `set` takes the channel keys of an own list except
-# mode, time_slot, tx_talkgroup and rx_group_list, for example:
+# Changes to upstream channels, matched by callsign. mode, band (a band name of the radio's
+# capability) and radios narrow an override to some of the callsign's channels and radios.
+# Every override needs a reason. `set` takes the channel keys of an own list; `clear` lists
+# keys to remove: tone_tx, tone_rx, bandwidth, color_code, time_slot, tx_talkgroup,
+# rx_group_list, power and tags. For example:
 #
 #   - callsign: XX1AA
 #     mode: FM
+#     band: 2m
+#     radios: [uv5r-mini]
 #     reason: the repeater uses a different CTCSS than the list says
 #     set: {tone_tx: {ctcss: 162.2}}
+#     clear: [tone_rx]
 overrides: []

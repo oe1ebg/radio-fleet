@@ -7,6 +7,8 @@
 #   left out is no limit. The channel, zone, scan-list and name limits follow the
 #   manufacturers' data; the renderer step of each radio checks them against its tool.
 # region: {locator, max_km} or {prefixes}; it applies to upstream channels only.
+#   modes gives some modes another area; exclude names callsigns the radio never
+#   gets, each with the reason that its drop shows.
 # zones, scan_lists: zone (or bank) and scan-list rules. A rule's keys mode, band,
 #   source, tag and channel (a name pattern) take one value or a list; a channel joins
 #   when it meets every key. qdmr only: base_channel names hand-made channels of the
@@ -17,9 +19,22 @@
 # dmrconf_radio: for the qdmr renderer, the radio key of `dmrconf verify --radio`
 #   (`dmrconf --list-radios`). `fleet build` of a qdmr radio needs a base and a
 #   dmrconf radio.
-# power: the chirp renderer needs watts (5W); qdmr takes Max, High, Mid, Low or Min.
+# own_lists: listen holds receive-only channels. qdmr and CHIRP write them so that
+#   the radio cannot transmit; the other renderers drop them.
+# dmr_template: the template of every upstream DMR repeater; dmr_templates names
+#   other templates by callsign or callsign prefix (the longest one wins).
+# power: the power of a channel that sets none, a level (Max, High, Mid, Low, Min) or
+#   watts (5W, 0.5W). power_levels maps the levels to watts, or to the radio's own
+#   values (LOW, LOW2, LOW3 or HIGH for jayt). Watts go to the nearest level that has
+#   watts, the lower one on a tie, and the build reports it, such as "25W -> Max (5W)".
+#   qdmr takes the levels as they are, Hytera maps them to High, Middle and Low, and
+#   chirp writes watts. power_range {min, max, step} describes a radio that sets watts
+#   in steps; no renderer writes it yet (the FTX-1 waits for jayt).
+# naming: upstream is the name of an upstream channel, from {callsign}, {band} (the
+#   capability band of its RX frequency) and {site} (the snapshot's name column);
+#   replace rewrites every name.
 # ft5d: zones become the ADMS banks 1 to 24, in order. MCP's FT5D output carries no
-#   DCS, so a DCS channel fails the build; this example region leaves out XX1CC.
+#   DCS, so a DCS channel fails the build; this example region excludes XX1CC.
 # tools.jayt: the jayt executable (relative to the data root, or absolute) and the
 #   commit it was built from; the jayt renderer needs it. The path here is a placeholder.
 #   A jayt radio's base is its radio file (an FT-3185 image), which never enters a
@@ -62,8 +77,11 @@ radios:
       scan_lists: 250
       scan_list_channels: 50
       name_length: 16
-    region: {locator: JJ00mm, max_km: 80}
-    own_lists: [simplex]
+    region:
+      locator: JJ00mm
+      max_km: 80
+      modes: {DMR: {locator: JJ00mm, max_km: 150}}
+    own_lists: [simplex, listen]
     dmr_template: standard
     zones: &dmr_zones
       - {name: Simplex, source: simplex}
@@ -83,8 +101,9 @@ radios:
     dmrconf_radio: d168uv
     capability: *anytone
     region: {locator: JJ00mm, max_km: 50}
-    own_lists: [simplex]
+    own_lists: [simplex, listen]
     dmr_template: standard
+    dmr_templates: {XX1BB: local}
     zones: *dmr_zones
     scan_lists: *dmr_scan_lists
     power: High
@@ -101,8 +120,9 @@ radios:
       channels: 999
       name_length: 12
     region: {locator: JJ00mm, max_km: 40}
-    own_lists: [simplex]
-    power: 5W
+    own_lists: [simplex, listen]
+    power: High
+    power_levels: &baofeng_power {Max: 5W, High: 5W, Mid: 2W, Low: 1W, Min: 0.5W}
 
   uv9r-pro:
     model: Baofeng UV-9R Pro
@@ -110,7 +130,8 @@ radios:
     capability: *baofeng
     region: {locator: JJ00mm, max_km: 40}
     own_lists: [simplex]
-    power: 5W
+    power: High
+    power_levels: *baofeng_power
 
   rt95:
     model: Retevis RT95
@@ -124,7 +145,8 @@ radios:
       name_length: 6
     region: {prefixes: [XX1, XX3]}
     own_lists: [simplex]
-    power: 25W
+    power: High
+    power_levels: {Max: 25W, High: 25W, Mid: 10W, Low: 5W, Min: 5W}
 
   ft5d:
     model: Yaesu FT5D
@@ -138,8 +160,10 @@ radios:
       zones: 24
       zone_channels: 100
       name_length: 16
-    region: {prefixes: [XX3, XX5]}
-    own_lists: [simplex]
+    region:
+      prefixes: [XX1, XX3, XX5]
+      exclude: {XX1CC: "DCS, which MCP's FT5D output cannot carry"}
+    own_lists: [simplex, listen]
     zones:
       - {name: Simplex, source: simplex}
       - {name: C4FM, mode: C4FM}
@@ -158,6 +182,7 @@ radios:
       name_length: 6
     region: {locator: JJ00mm, max_km: 40}
     own_lists: [simplex]
+    power_levels: {Max: HIGH, High: HIGH, Low: LOW}
 
   ftx1:
     model: Yaesu FTX-1
@@ -179,6 +204,7 @@ radios:
       - {name: Simplex, source: simplex}
       - {name: C4FM, mode: C4FM}
       - {name: FM, mode: FM}
+    naming: {upstream: "{callsign} {band}"}
 
   hp785:
     model: Hytera HP785

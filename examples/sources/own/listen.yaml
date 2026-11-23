@@ -1,0 +1,7 @@
+# Receive-only channels: the radio never transmits on them, so selection checks only
+# their RX frequency against the radio's bands. Frequencies in MHz, bandwidth in kHz.
+name: listen
+tags: [listen]
+channels:
+  - {name: PMR 1, rx: 446.00625, mode: FM, bandwidth: 12.5, rx_only: true}
+  - {name: Freenet 1, rx: 149.025, mode: FM, bandwidth: 12.5, rx_only: true}

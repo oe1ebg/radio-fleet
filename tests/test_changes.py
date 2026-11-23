@@ -34,21 +34,22 @@ def test_a_before_and_after_pair_gives_the_expected_report(tmp_path: Path) -> No
         replace(TWIN, name="XX1TW"),
         Channel("XX1NE", 438_700_000, 431_100_000, Mode.FM, bandwidth_hz=12_500),
     )
-    override = Override("XX1AA", "the repeater moved to 77.0 Hz", {"tone_tx": Ctcss(77.0)})
+    override = Override("XX1AA", "the repeater moved to 77.0 Hz", {"tone_tx": Ctcss(77.0)}, clear=("tone_rx",))
+    stale = Override("XX1GO", "the repeater lost its tone", {}, clear=("tone_tx",), mode=Mode.FM, band="70cm")
     selection = Selection(
         radio,
         after,
         (),
         (),
         (Drop("XX1FA", "TX 435.00000 MHz outside the TX bands"),),
-        (AppliedOverride("XX1AA", Mode.FM, override),),
+        (AppliedOverride("XX1AA", Mode.FM, "2m", override),),
+        (stale,),
+        ("XX1TW: 2.4W -> Mid (2W)",),
     )
     build = tmp_path / "build"
     record.write_build(selection, build / "uv5r-mini")
     applied = tmp_path / "applied.yaml"
-    record.save_applied(
-        applied, {"uv5r-mini": Applied("2026-01-02", "sha256:00", tuple(map(record.channel_record, before)))}
-    )
+    record.save_applied(applied, {"uv5r-mini": Applied("2026-01-02", "sha256:00", records(before))})
 
     changes.write([radio], build, applied)
 
@@ -81,13 +82,21 @@ def test_a_before_and_after_pair_gives_the_expected_report(tmp_path: Path) -> No
         "\n"
         "### Overrides (1)\n"
         "\n"
-        "- XX1AA FM: tone_tx=CTCSS 77 (the repeater moved to 77.0 Hz)\n"
+        "- XX1AA FM 2m: tone_tx=CTCSS 77, tone_rx=- (the repeater moved to 77.0 Hz)\n"
+        "\n"
+        "### Overrides that match nothing (1)\n"
+        "\n"
+        "- XX1GO FM 70cm: tone_tx=- (the repeater lost its tone)\n"
+        "\n"
+        "### Power set to the nearest value (1)\n"
+        "\n"
+        "- XX1TW: 2.4W -> Mid (2W)\n"
     )
 
 
 def test_the_first_build_compares_against_nothing_and_an_unbuilt_radio_says_so(tmp_path: Path) -> None:
     radios = fleet.load(EXAMPLES / "fleet.yaml", EXAMPLES).radios
-    selection = Selection(radios["rt95"], (CALL,), (), (), (), ())
+    selection = Selection(radios["rt95"], (replace(CALL, power="25W"),), (), (), (), ())
     record.write_build(selection, tmp_path / "build" / "rt95")
 
     changes.write([radios["rt95"], radios["hm785"]], tmp_path / "build", tmp_path / "applied.yaml")
@@ -95,13 +104,19 @@ def test_the_first_build_compares_against_nothing_and_an_unbuilt_radio_says_so(t
     assert (tmp_path / "build" / "CHANGES.md").read_text(encoding="utf-8").split("\n## ")[1:] == [
         "rt95: Retevis RT95 (chirp)\n\n"
         "First build, nothing applied: 1 channels.\n\n"
-        "### Added (1)\n\n- 2m Call: rx 145.50000, tx 145.50000, mode FM, power 5W\n\n"
+        "### Added (1)\n\n- 2m Call: rx 145.50000, tx 145.50000, mode FM, power 25W\n\n"
         "### Removed (0)\n\nNone.\n\n"
         "### Changed (0)\n\nNone.\n\n"
         "### Drops (0)\n\nNone.\n\n"
-        "### Overrides (0)\n\nNone.\n",
+        "### Overrides (0)\n\nNone.\n\n"
+        "### Overrides that match nothing (0)\n\nNone.\n\n"
+        "### Power set to the nearest value (0)\n\nNone.\n",
         "hm785: Hytera HM785 (hytera)\n\nNot built.\n",
     ]
+
+
+def records(channels: tuple[Channel, ...]) -> tuple[record.ChannelRecord, ...]:
+    return tuple(record.channel_record(channel) for channel in channels)
 
 
 def lists(before: tuple[Channel, ...], after: tuple[Channel, ...], tmp_path: Path) -> dict[str, list[str]]:
@@ -109,9 +124,7 @@ def lists(before: tuple[Channel, ...], after: tuple[Channel, ...], tmp_path: Pat
     radio = fleet.load(EXAMPLES / "fleet.yaml", EXAMPLES).radios["uv5r-mini"]
     record.write_build(Selection(radio, after, (), (), (), ()), tmp_path / "build" / "uv5r-mini")
     applied = tmp_path / "applied.yaml"
-    record.save_applied(
-        applied, {"uv5r-mini": Applied("2026-01-02", "sha256:00", tuple(map(record.channel_record, before)))}
-    )
+    record.save_applied(applied, {"uv5r-mini": Applied("2026-01-02", "sha256:00", records(before))})
     changes.write([radio], tmp_path / "build", applied)
     report = (tmp_path / "build" / "CHANGES.md").read_text(encoding="utf-8")
     return {
@@ -168,7 +181,7 @@ def test_every_channel_field_a_radio_holds_is_recorded_and_compared() -> None:
     full = Channel(
         "XX1FU", 438_000_000, 430_400_000, Mode.DMR, Ctcss(67.0), Dcs(23), 12_500, 1, 2, "TG 232", "Austria", "1W"
     )
-    assert list(record.channel_record(full)) == ["name", *record.FIELDS]
+    assert list(record.channel_record(replace(full, rx_only=True))) == ["name", *record.FIELDS]
     others: dict[str, Any] = {
         "name": "XX1FV",
         "rx_hz": 438_100_000,
@@ -182,11 +195,13 @@ def test_every_channel_field_a_radio_holds_is_recorded_and_compared() -> None:
         "tx_talkgroup": "TG 9",
         "rx_group_list": "Local",
         "power": "5W",
+        "rx_only": True,
     }
-    not_held = {"tags", "source", "position"}
+    not_held = {"tags", "source", "position", "callsign", "site"}
     assert {field.name for field in fields(Channel)} == set(others) | not_held
     for field, value in others.items():
-        assert record.channel_record(replace(full, **{field: value})) != record.channel_record(full), field
+        changed = record.channel_record(replace(full, **{field: value}))
+        assert changed != record.channel_record(full), field
 
 
 class FakeDmrconf:
