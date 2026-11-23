@@ -147,8 +147,8 @@ def _unfit(radio: Radio, channel: Channel) -> str | None:
 def _fitted(radio: Radio, channel: Channel, origin: str) -> tuple[Channel, str | None]:
     """The channel as the radio holds it: its name rewritten and cut, its power (or the profile's when it has
     none) as the radio's value, and a receive-only channel's TX frequency at its RX frequency. The note tells
-    how the radio's value differs from the channel's own watts; `origin` names where the channel's power comes
-    from in an error."""
+    how the radio's value differs from the channel's own watts; `origin` names where the channel comes from in
+    an error."""
     name = channel.name
     for old, new in radio.name_replacements:
         name = name.replace(old, new)
