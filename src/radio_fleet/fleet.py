@@ -13,7 +13,7 @@ from typing import Literal, get_args
 
 from radio_fleet import config, geo, hytera_tool, power
 from radio_fleet.config import ConfigError, Node
-from radio_fleet.model import Channel, Mode, Position, Power, Watts
+from radio_fleet.model import DEFAULT_TUNING_STEP_HZ, Channel, Mode, Position, Power, Watts
 from radio_fleet.power import PowerError, PowerRange, RadioPower
 from radio_fleet.sources import MHZ, Sources, dmr_templates_path, own_list_path, tuning_step
 
@@ -347,7 +347,7 @@ def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
         power=radio_power,
         upstream_name=upstream_name,
         name_replacements=replacements,
-        step_hz=tuning_step(fields["step"]) if "step" in fields else 12_500,
+        step_hz=tuning_step(fields["step"]) if "step" in fields else DEFAULT_TUNING_STEP_HZ,
         equipment_dir=_equipment_dir(fields["equipment_dir"]) if "equipment_dir" in fields else Path(radio_id),
     )
 

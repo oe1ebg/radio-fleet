@@ -50,6 +50,7 @@ TUNING_STEPS_HZ = (
     200_000,
 )
 """The tuning steps of CHIRP (its `chirp_common.TUNING_STEPS`)."""
+DEFAULT_TUNING_STEP_HZ = 12_500
 
 
 @dataclass(frozen=True, slots=True)
