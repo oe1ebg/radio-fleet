@@ -13,9 +13,9 @@ from typing import Literal, get_args
 
 from radio_fleet import config, geo, hytera_tool, power
 from radio_fleet.config import ConfigError, Node
-from radio_fleet.model import Channel, Mode, Position, Power, Watts
+from radio_fleet.model import DEFAULT_TUNING_STEP_HZ, Channel, Mode, Position, Power, Watts
 from radio_fleet.power import PowerError, PowerRange, RadioPower
-from radio_fleet.sources import MHZ, Sources, dmr_templates_path, own_list_path
+from radio_fleet.sources import MHZ, Sources, dmr_templates_path, own_list_path, tuning_step
 
 
 class Renderer(StrEnum):
@@ -74,6 +74,7 @@ _POWER_VALUES: Mapping[Renderer, _PowerValues] = {
     ),
 }
 _WATTS_RENDERERS = frozenset({Renderer.CHIRP})
+_SCAN_RENDERERS = frozenset({Renderer.QDMR, Renderer.CHIRP})
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,6 +166,8 @@ class GroupRule:
 @dataclass(frozen=True, slots=True)
 class Radio:
     id: str
+    place: str
+    """The profile in the fleet file, such as `fleet.yaml: radios.uv5r-mini`."""
     model: str
     renderer: Renderer
     base: Path | None
@@ -183,6 +186,10 @@ class Radio:
     upstream_name: str
     """The name of an upstream channel, a format with the fields callsign, band and site."""
     name_replacements: tuple[tuple[str, str], ...]
+    step_hz: int
+    """The tuning step of a channel that sets none; only the chirp renderer writes it."""
+    equipment_dir: Path
+    """The radio's directory in the fleet's equipment directory, relative to it."""
 
     def template_for(self, callsign: str | None) -> str | None:
         keys = [key for key in self.dmr_templates if callsign is not None and callsign.startswith(key)]
@@ -296,6 +303,8 @@ def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
             "power_levels",
             "power_range",
             "naming",
+            "step",
+            "equipment_dir",
         ],
     )
     capability = _capability(fields["capability"])
@@ -307,8 +316,10 @@ def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
         raise fields["dmrconf_radio"].error("only the qdmr renderer takes a dmrconf radio")
     if renderer is not Renderer.HYTERA and "factory" in fields:
         raise fields["factory"].error("only the hytera renderer takes a factory image")
-    if renderer is not Renderer.QDMR and "scan_lists" in fields:
-        raise fields["scan_lists"].error("only the qdmr renderer takes scan lists")
+    if renderer not in _SCAN_RENDERERS and "scan_lists" in fields:
+        raise fields["scan_lists"].error("only the qdmr and chirp renderers take scan lists")
+    if renderer is not Renderer.CHIRP and "step" in fields:
+        raise fields["step"].error("only the chirp renderer takes a tuning step")
     rules = {
         key: tuple(_group_rule(item, capability, renderer) for item in fields[key].items()) if key in fields else ()
         for key in ("zones", "scan_lists")
@@ -320,6 +331,7 @@ def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
     templates = fields["dmr_templates"].entries() if "dmr_templates" in fields else {}
     return Radio(
         id=radio_id,
+        place=f"{node.file}: {node.path}",
         model=fields["model"].text(),
         renderer=renderer,
         base=data_root / fields["base"].text() if "base" in fields else None,
@@ -335,7 +347,16 @@ def _radio(radio_id: str, node: Node, data_root: Path) -> Radio:
         power=radio_power,
         upstream_name=upstream_name,
         name_replacements=replacements,
+        step_hz=tuning_step(fields["step"]) if "step" in fields else DEFAULT_TUNING_STEP_HZ,
+        equipment_dir=_equipment_dir(fields["equipment_dir"]) if "equipment_dir" in fields else Path(radio_id),
     )
+
+
+def _equipment_dir(node: Node) -> Path:
+    path = Path(node.text())
+    if not path.parts or path.is_absolute() or ".." in path.parts:
+        raise node.error("expected a directory inside the equipment directory, such as anytone/d878")
+    return path
 
 
 def _power(renderer: Renderer, default: Node | None, levels: Node | None, stepped: Node | None) -> RadioPower | None:

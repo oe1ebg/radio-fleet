@@ -1,3 +1,4 @@
+import csv
 import shutil
 from pathlib import Path
 
@@ -55,6 +56,15 @@ def test_a_failing_check_fails_the_build_names_the_radio_and_removes_its_output(
     assert not output_of(data, "d168uv").exists()
 
 
+def test_a_chirp_profile_step_and_scan_lists_reach_tstep_and_skip(data: Path) -> None:
+    assert main(["build", "--data", str(data), "--radio", "uv9r-pro"], dmrconf=FakeDmrconf()) == 0
+    with (data / "build" / "uv9r-pro" / "uv9r-pro.csv").open(encoding="utf-8", newline="") as csv_file:
+        rows = {row["Name"]: (row["TStep"], row["Skip"]) for row in csv.DictReader(csv_file)}
+    assert rows["2m Call"] == ("5.00", "S")
+    assert rows["XX1AA"] == ("5.00", "")
+    assert rows["XX3DD"] == ("12.50", "")
+
+
 @pytest.mark.parametrize(
     ("power", "message"),
     [
@@ -69,6 +79,36 @@ def test_a_power_the_profile_cannot_resolve_fails_with_the_profile(
     fleet_file.write_text(fleet_file.read_text().replace("power: High\n    naming", f"power: {power}\n    naming", 1))
     assert main(["build", "--data", str(data), "--radio", "d878uv2plus"], dmrconf=FakeDmrconf()) == 1
     assert capsys.readouterr().err == f"fleet build: {fleet_file}: radios.d878uv2plus.power: {message}\n"
+
+
+@pytest.mark.parametrize(
+    ("file", "change", "origin"),
+    [
+        (
+            "sources/own/simplex.yaml",
+            ("rx: 145.500, mode: FM}", "rx: 145.500, mode: FM, power: 5W}"),
+            "the own list {path}",
+        ),
+        (
+            "sources/overrides.yaml",
+            ("overrides: []", "overrides: [{callsign: XX1AA, reason: synthetic, set: {power: 5W}}]"),
+            "oevsv-repeater-db",
+        ),
+    ],
+)
+def test_a_channel_power_the_qdmr_profile_cannot_resolve_names_the_profile_and_the_source(
+    data: Path, file: str, change: tuple[str, str], origin: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = data / file
+    assert change[0] in path.read_text()
+    path.write_text(path.read_text().replace(*change))
+    assert main(["build", "--data", str(data), "--radio", "d878uv2plus"], dmrconf=FakeDmrconf()) == 1
+    error = capsys.readouterr().err
+    assert error.startswith(
+        f"fleet build: {data / 'fleet.yaml'}: radios.d878uv2plus.power_levels: no level with watts for the power 5W"
+    )
+    assert f"from {origin.format(path=path)}" in error
+    assert "bases/" not in error
 
 
 @pytest.mark.parametrize("key", ["base: bases/qdmr/d878uv2plus.yaml", "dmrconf_radio: d878uv2"])

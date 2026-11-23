@@ -42,6 +42,9 @@ _FIELDS: dict[str, Callable[[Channel], str | None]] = {
     "rx_group_list": lambda channel: _text(channel.rx_group_list),
     "power": lambda channel: _text(channel.power),
     "rx_only": lambda channel: "yes" if channel.rx_only else None,
+    "step": lambda channel: None if channel.step_hz is None else f"{channel.step_hz / 1000:g} kHz",
+    "skip": lambda channel: None if channel.skip is None else "yes" if channel.skip else "no",
+    "note": lambda channel: channel.note,
 }
 FIELDS = tuple(_FIELDS)
 """The fields of a channel record besides its name, in the order they are written and compared."""

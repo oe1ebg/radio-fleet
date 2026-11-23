@@ -12,7 +12,11 @@
 # zones, scan_lists: zone (or bank) and scan-list rules. A rule's keys mode, band,
 #   source, tag and channel (a name pattern) take one value or a list; a channel joins
 #   when it meets every key. qdmr only: base_channel names hand-made channels of the
-#   base that join first. Only the qdmr renderer writes scan lists.
+#   base that join first. qdmr and chirp write scan lists: CHIRP has one scan, so a
+#   chirp radio with scan-list rules skips (Skip S) every channel that no rule takes.
+#   A channel's own skip: true or false wins over the rules.
+# step: chirp only, the tuning step (TStep) in kHz of a channel that sets none,
+#   default 12.5. A channel off that step gets the coarsest CHIRP step it is on.
 # base: the renderer's base file, relative to the data root; a base that is named but
 #   missing is an error. jayt and Hytera base files never enter a repository; their
 #   renderer steps say how they are given.
@@ -47,7 +51,8 @@
 #   outside every repository, so the Hytera profiles below show them as comments with
 #   placeholder paths.
 # equipment: the directory `fleet publish` copies a radio's build to, as
-#   <equipment>/<radio>/generated/<date>/; relative to the data root, and it must exist.
+#   <equipment>/<equipment_dir>/generated/<date>/; relative to the data root, and it
+#   must exist. A radio's equipment_dir is a directory inside it, default the radio id.
 #   `fleet applied <radio>` records the build in applied.yaml in the data root. The
 #   directory here is a placeholder that this repository does not have.
 
@@ -66,6 +71,7 @@ radios:
     renderer: qdmr
     base: bases/qdmr/d878uv2plus.yaml
     dmrconf_radio: d878uv2
+    equipment_dir: anytone/d878uv2plus
     capability: &anytone
       bands:
         - {name: 2m, rx: [136, 174], tx: [144, 146]}
@@ -130,6 +136,8 @@ radios:
     capability: *baofeng
     region: {locator: JJ00mm, max_km: 40}
     own_lists: [simplex]
+    scan_lists: [{name: Repeaters, source: oevsv-repeater-db}]
+    step: 5
     power: High
     power_levels: *baofeng_power
 

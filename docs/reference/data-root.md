@@ -51,6 +51,9 @@ A channel has these keys:
 | `power` | string | no | A power level, `Max`, `High`, `Mid`, `Low` or `Min`, or watts, such as `5W` or `0.5W`. Wins over the profile's `power`; each profile resolves it to the radio's value (see [`power`](fleet-yaml.md#power)). |
 | `tags` | list of strings | no | Added to the list's tags. |
 | `rx_only` | `true` or `false` | no | A receive-only channel, such as PMR446 or Freenet: the radio never transmits on it. Selection checks only its RX frequency. Default: `false`. |
+| `step` | number | no | The CHIRP tuning step (`TStep`) in kHz: 1, 2.5, 5, 6.25, 9, 10, 12.5, 15, 20, 25, 30, 50, 100, 125 or 200. Wins over the profile's `step`. Only the `chirp` renderer writes it. |
+| `skip` | `true` or `false` | no | `true`: CHIRP's scan skips the channel (`Skip` `S`); `false`: it scans it. Wins over the profile's scan-list rules. Only the `chirp` renderer writes it. |
+| `note` | string | no | The CHIRP `Comment`. Wins over the site of an upstream channel. Only the `chirp` renderer writes it. |
 
 ## `talkgroups.yaml`
 
@@ -70,7 +73,7 @@ A channel has these keys:
 | `overrides[].radios` | string or list | no | Only on these radios of `fleet.yaml`. Default: every radio. |
 | `overrides[].reason` | string | yes | Why. The change report shows it. |
 | `overrides[].set` | mapping | no | Any channel key of an own list, with its value. |
-| `overrides[].clear` | string or list | no | Keys to remove from the channel: `tone_tx`, `tone_rx`, `bandwidth`, `color_code`, `time_slot`, `tx_talkgroup`, `rx_group_list`, `power`, `tags`. |
+| `overrides[].clear` | string or list | no | Keys to remove from the channel: `tone_tx`, `tone_rx`, `bandwidth`, `color_code`, `time_slot`, `tx_talkgroup`, `rx_group_list`, `power`, `tags`, `step`, `skip`, `note`. |
 
 An override sets or clears at least one key, and never both for one key. `tags` in `set` replaces the channel's tags.
 
@@ -98,7 +101,7 @@ Written by `fleet applied`. One entry per radio id:
 ```yaml
 uv5r-mini:
   date: '2026-11-22'
-  digest: sha256:93ecc57271df88a604de9204267f089abbdc6ca00c86ce4431e6d6e3fc7451d5
+  digest: sha256:e8f516c8a8abb6fb1de61820636b4d5cfc5afef604087a511144f4199889b6c1
   channels:
   - name: 2m Call
     rx: '145.50000'
@@ -118,4 +121,4 @@ The channels have the fields of the build record below.
 | `build/<radio>/<radio>.<ext>` | The checked file. See [cli.md](cli.md#fleet-build). |
 | `build/<radio>/selection.yaml` | The build record: `channels`, `drops` (name and reason), `overrides`, `unmatched_overrides` and `power_notes` (text). |
 
-A channel in the build record has its `name` and each of these fields that it has, as text: `rx`, `tx` (MHz with 5 decimals), `mode`, `tone_tx`, `tone_rx` (`CTCSS 88.5` or `DCS 023`), `bandwidth` (`12.5 kHz`), `color_code`, `time_slot`, `tx_talkgroup`, `rx_group_list`, `power` (the radio's value, such as `5W`), `rx_only` (`yes`).
+A channel in the build record has its `name` and each of these fields that it has, as text: `rx`, `tx` (MHz with 5 decimals), `mode`, `tone_tx`, `tone_rx` (`CTCSS 88.5` or `DCS 023`), `bandwidth` (`12.5 kHz`), `color_code`, `time_slot`, `tx_talkgroup`, `rx_group_list`, `power` (the radio's value, such as `5W`), `rx_only` (`yes`), `step` (`5 kHz`), `skip` (`yes` or `no`), `note`. `step`, `skip` and `note` are the channel's own, not the profile's.

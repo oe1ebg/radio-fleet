@@ -18,8 +18,8 @@ An override changes the upstream channels of one callsign. Use it when the upstr
      - `mode`: only the channels of this mode, such as `FM`.
      - `band`: only the channels whose RX frequency is in the band of this name in the radio's `capability.bands`, such as `70cm`. Use it for a callsign with a repeater on two bands.
      - `radios`: only on these radios of `fleet.yaml`, such as `[uv5r-mini, rt95]`.
-   - `set` takes any channel key of an own list, with the values of an own list channel: `name`, `rx`, `tx`, `mode`, `tone_tx`, `tone_rx`, `bandwidth`, `color_code`, `time_slot`, `tx_talkgroup`, `rx_group_list`, `power` (a level or watts), `tags` and `rx_only`.
-   - `clear` removes keys from the channel: any of `tone_tx`, `tone_rx`, `bandwidth`, `color_code`, `time_slot`, `tx_talkgroup`, `rx_group_list`, `power` and `tags`. For example, `clear: [tone_rx]` makes the radio squelch on the carrier.
+   - `set` takes any channel key of an own list, with the values of an own list channel: `name`, `rx`, `tx`, `mode`, `tone_tx`, `tone_rx`, `bandwidth`, `color_code`, `time_slot`, `tx_talkgroup`, `rx_group_list`, `power` (a level or watts), `tags`, `rx_only`, and the CHIRP keys `step`, `skip` and `note`.
+   - `clear` removes keys from the channel: any of `tone_tx`, `tone_rx`, `bandwidth`, `color_code`, `time_slot`, `tx_talkgroup`, `rx_group_list`, `power`, `tags`, `step`, `skip` and `note`. For example, `clear: [tone_rx]` makes the radio squelch on the carrier.
 
 2. Check that the override applies:
 

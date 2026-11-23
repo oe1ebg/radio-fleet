@@ -1,9 +1,10 @@
 # Calling and simplex frequencies of the IARU region 1 band plans.
-# Frequencies in MHz, bandwidth in kHz; `tx` defaults to `rx`.
+# Frequencies in MHz, bandwidth in kHz; `tx` defaults to `rx`. `note` is the CHIRP
+# comment; `step` (kHz) and `skip` set a channel's CHIRP TStep and Skip.
 name: simplex
 tags: [simplex]
 channels:
   - {name: 2m Call, rx: 145.500, mode: FM}
-  - {name: 70cm Call, rx: 433.500, mode: FM}
+  - {name: 70cm Call, rx: 433.500, mode: FM, note: IARU calling channel}
   - {name: DMR Simplex, rx: 433.450, mode: DMR, color_code: 1, time_slot: 1, tx_talkgroup: TG99}
   - {name: C4FM Call, rx: 145.375, mode: C4FM}

@@ -63,7 +63,7 @@ Example:
 
 ## How channels are matched
 
-- The compared fields are `rx`, `tx`, `mode`, `tone_tx`, `tone_rx`, `bandwidth`, `color_code`, `time_slot`, `tx_talkgroup`, `rx_group_list`, `power` (the radio's value, such as `5W`) and `rx_only`. Tags and sources are not compared.
+- The compared fields are `rx`, `tx`, `mode`, `tone_tx`, `tone_rx`, `bandwidth`, `color_code`, `time_slot`, `tx_talkgroup`, `rx_group_list`, `power` (the radio's value, such as `5W`), `rx_only`, and the channel's own `step`, `skip` and `note`. Tags and sources are not compared.
 - A channel is matched by its name. Then a change of mode is a change, such as `mode FM -> C4FM`.
 - A name that occurs more than once, in the build or in the applied build, is matched by name and mode. Its label is `<name> [<mode>]`, such as `XX1CC [FM]`. If the name and mode also repeat, the label counts them: `<name> [<mode> #2]`.
 - A renamed channel shows as one removed and one added channel.

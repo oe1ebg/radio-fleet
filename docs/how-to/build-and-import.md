@@ -50,7 +50,7 @@ ERROR in cli/verify.cc@131: Crit: In list 'channels', In element 4 ('23cm Call')
 
 Needs: nothing besides radio-fleet.
 
-1. Set `renderer: chirp`, the default power level in `power` and the watts of each level in `power_levels`, such as `power: High` and `power_levels: {High: 5W, Low: 1W}`.
+1. Set `renderer: chirp`, the default power level in `power` and the watts of each level in `power_levels`, such as `power: High` and `power_levels: {High: 5W, Low: 1W}`. Optionally set the tuning step in kHz, such as `step: 5` (default 12.5), and scan-list rules under `scan_lists` for CHIRP's scan.
 2. Build:
 
    ```sh
@@ -63,12 +63,13 @@ Needs: nothing besides radio-fleet.
 
 3. In CHIRP, download the image from the radio, import `build/uv5r-mini/uv5r-mini.csv` into it, review the memories, and upload the image to the radio.
 
-The CSV has CHIRP's generic columns. Memories are numbered from 1 in the order of the selection. A bandwidth of 12.5 kHz or less gives `NFM`. A receive-only channel has the `Duplex` `off`, so the radio does not transmit on it. The check counts the columns, the memory numbers, the memories against `channels` and each name against `name_length`.
+The CSV has CHIRP's generic columns. Memories are numbered from 1 in the order of the selection. A bandwidth of 12.5 kHz or less gives `NFM`. A receive-only channel has the `Duplex` `off`, so the radio does not transmit on it. `TStep` is the channel's `step`, else the profile's `step` when the frequency and offset are on it, else the coarsest of 12.5, 6.25, 5 and 2.5 kHz they are on. `Skip` is `S` for a channel with `skip: true`, and, when the profile has `scan_lists`, for every channel that no scan list takes; `skip: false` keeps a channel in the scan. `Comment` is the channel's `note`, else the site of an upstream channel. The check counts the columns, the memory numbers, the memories against `channels` and each name against `name_length`.
 
 The CHIRP renderer carries FM only. These fail the build:
 
 - a channel without a power level: `CHIRP needs a power: give the profile a power level and its watts, such as power: High and power_levels: {High: 5W}`
 - a frequency or offset that is on none of the tuning steps 12.5, 6.25, 5 or 2.5 kHz
+- a frequency or offset that is not on the channel's own `step`
 
 ## Yaesu FT5D: ADMS-14 CSV
 

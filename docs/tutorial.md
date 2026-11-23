@@ -107,16 +107,16 @@ cat build/uv5r-mini/uv5r-mini.csv
 
 ```text
 Location,Name,Frequency,Duplex,Offset,Tone,rToneFreq,cToneFreq,DtcsCode,DtcsPolarity,RxDtcsCode,CrossMode,Mode,TStep,Skip,Power,Comment,URCALL,RPT1CALL,RPT2CALL,DVCODE
-1,2m Call,145.500000,,0.000000,,88.5,88.5,023,NN,023,Tone->Tone,FM,12.50,,5.0W,simplex,,,,
-2,70cm Call,433.500000,,0.000000,,88.5,88.5,023,NN,023,Tone->Tone,FM,12.50,,5.0W,simplex,,,,
-3,PMR 1,446.006250,off,0.000000,,88.5,88.5,023,NN,023,Tone->Tone,NFM,6.25,,5.0W,listen,,,,
-4,Freenet 1,149.025000,off,0.000000,,88.5,88.5,023,NN,023,Tone->Tone,NFM,12.50,,5.0W,listen,,,,
-5,XX1AA,145.600000,-,0.600000,TSQL,88.5,88.5,023,NN,023,Tone->Tone,NFM,12.50,,5.0W,oevsv-repeater-db,,,,
-6,XX1CC,438.625000,-,7.600000,Cross,88.5,88.5,023,NN,023,DTCS->,FM,12.50,,5.0W,oevsv-repeater-db,,,,
-7,XX3DD,145.662500,-,0.600000,Tone,123.0,88.5,023,NN,023,Tone->Tone,FM,12.50,,5.0W,oevsv-repeater-db,,,,
+1,2m Call,145.500000,,0.000000,,88.5,88.5,023,NN,023,Tone->Tone,FM,12.50,,5.0W,,,,,
+2,70cm Call,433.500000,,0.000000,,88.5,88.5,023,NN,023,Tone->Tone,FM,12.50,,5.0W,IARU calling channel,,,,
+3,PMR 1,446.006250,off,0.000000,,88.5,88.5,023,NN,023,Tone->Tone,NFM,6.25,,5.0W,,,,,
+4,Freenet 1,149.025000,off,0.000000,,88.5,88.5,023,NN,023,Tone->Tone,NFM,12.50,,5.0W,,,,,
+5,XX1AA,145.600000,-,0.600000,TSQL,88.5,88.5,023,NN,023,Tone->Tone,NFM,12.50,,5.0W,Synthetic Hill,,,,
+6,XX1CC,438.625000,-,7.600000,Cross,88.5,88.5,023,NN,023,DTCS->,FM,12.50,,5.0W,Synthetic Ridge,,,,
+7,XX3DD,145.662500,-,0.600000,Tone,123.0,88.5,023,NN,023,Tone->Tone,FM,12.50,,5.0W,Synthetic Valley,,,,
 ```
 
-The receive-only channels have the `Duplex` `off`, so the radio does not transmit on them.
+The receive-only channels have the `Duplex` `off`, so the radio does not transmit on them. `TStep` is the profile's step, 12.5 kHz by default, except for PMR 1, which is on 6.25 kHz steps only. `Comment` is the `note` of an own-list channel, such as the one of 70cm Call, or the site of an upstream repeater. The profile has no scan-list rules, so CHIRP's scan skips nothing (`Skip`); the uv9r-pro profile of the example has a rule that keeps only the repeaters in the scan, and a `step` of 5 kHz.
 
 `build/uv5r-mini/` also has `selection.yaml`, the record of this build. The change report and `fleet applied` read it.
 
@@ -205,7 +205,7 @@ First build, nothing applied: 7 channels.
 ### Added (7)
 
 - 2m Call: rx 145.50000, tx 145.50000, mode FM, power 5W
-- 70cm Call: rx 433.50000, tx 433.50000, mode FM, power 5W
+- 70cm Call: rx 433.50000, tx 433.50000, mode FM, power 5W, note IARU calling channel
 - PMR 1: rx 446.00625, tx 446.00625, mode FM, bandwidth 12.5 kHz, power 5W, rx_only yes
 - Freenet 1: rx 149.02500, tx 149.02500, mode FM, bandwidth 12.5 kHz, power 5W, rx_only yes
 - XX1AA: rx 145.60000, tx 145.00000, mode FM, tone_tx CTCSS 88.5, tone_rx CTCSS 88.5, bandwidth 12.5 kHz, power 5W
@@ -228,7 +228,7 @@ None.
 
 ## 8. Publish the build
 
-`fleet publish` copies a build to the `equipment` directory of `fleet.yaml`, under the radio and the date. The example names `equipment`, which does not exist yet.
+`fleet publish` copies a build to the `equipment` directory of `fleet.yaml`, under the radio's `equipment_dir` (default: the radio id) and the date. The example names `equipment`, which does not exist yet.
 
 1. Make the directory and publish:
 
@@ -262,7 +262,7 @@ fleet applied uv5r-mini
 ```
 
 ```text
-uv5r-mini: sha256:93ecc57271df88a604de9204267f089abbdc6ca00c86ce4431e6d6e3fc7451d5 in applied.yaml
+uv5r-mini: sha256:e8f516c8a8abb6fb1de61820636b4d5cfc5afef604087a511144f4199889b6c1 in applied.yaml
 git tag applied/uv5r-mini/2026-11-22
 ```
 

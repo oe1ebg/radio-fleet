@@ -199,11 +199,17 @@ def test_a_profile_naming_a_missing_file_is_refused_with_the_file(
             r"radios\.mono\.zones\S*base_channel: only the qdmr renderer takes base channels",
         ),
         (
-            (
-                "    zones:\n      - {name: Own, source: synthetic}\n      - {name: XX1",
-                "    scan_lists:\n      - {name: XX1",
-            ),
-            r"radios\.mono\.scan_lists: only the qdmr renderer takes scan lists",
+            ("    renderer: chirp\n", "    renderer: ft5d\n    scan_lists: [{name: All}]\n"),
+            r"radios\.mono\.scan_lists: only the qdmr and chirp renderers take scan lists",
+        ),
+        (
+            ("    renderer: chirp\n", "    renderer: chirp\n    step: 7\n"),
+            r"radios\.mono\.step: a tuning step is one of",
+        ),
+        (("    renderer: qdmr\n", "    renderer: qdmr\n    step: 5\n"), r"radios\.\w+\.step: only the chirp renderer"),
+        *(
+            (("    renderer: chirp\n", f"    renderer: chirp\n    equipment_dir: {path}\n"), "equipment_dir: expected")
+            for path in ("/abs", "../out", ".")
         ),
     ],
 )
@@ -396,7 +402,8 @@ def test_a_power_level_the_profile_does_not_map_fails_with_the_profile_and_the_l
     the_fleet, own = step(tmp_path, STEP.replace("    power: High\n    power_levels: {High: 5W, Low: 1W}\n", ""))
     with pytest.raises(
         ConfigError,
-        match=r"radios\.chirp\.power_levels: no value for the power Low of channel 'XX1AB' from synthetic-db",
+        match=r"fleet\.yaml: radios\.chirp\.power_levels: no value for the power Low of channel 'XX1AB' from "
+        r"synthetic-db$",
     ):
         select(the_fleet.radios["chirp"], STEP_UPSTREAM, own)
 
@@ -405,7 +412,8 @@ def test_watts_on_a_profile_without_watts_fail_with_the_profile_and_the_list(tmp
     the_fleet, own = step(tmp_path)
     with pytest.raises(
         ConfigError,
-        match=r"radios\.qdmr\.power_levels: no level with watts for the power 5W of channel 'Freenet' from listen",
+        match=r"fleet\.yaml: radios\.qdmr\.power_levels: no level with watts for the power 5W of channel 'Freenet' "
+        r"from the own list \S*own/listen\.yaml$",
     ):
         select(the_fleet.radios["qdmr"], [], with_listen_power(own, watts(5)))
 
@@ -478,8 +486,8 @@ def test_a_power_that_is_a_radio_value_refuses_a_channel_with_its_own_power(
     )
     with pytest.raises(
         ConfigError,
-        match=rf"radios\.chirp\.power: '{fixed}' is the power of every channel, but channel 'XX1AB' from "
-        r"synthetic-db sets the power Low; make power a level or watts",
+        match=rf"fleet\.yaml: radios\.chirp\.power: '{fixed}' is the power of every channel, but channel 'XX1AB' "
+        r"from synthetic-db sets the power Low; make power a level or watts",
     ):
         select(the_fleet.radios["chirp"], STEP_UPSTREAM, own)
 
