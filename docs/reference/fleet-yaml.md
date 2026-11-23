@@ -47,7 +47,7 @@ The Hytera command lines run in the data root. A placeholder can be a whole argu
 | `zones` | list | no | Zone rules. Default: none. |
 | `scan_lists` | list | qdmr | Scan-list rules. Default: none. Only the `qdmr` renderer takes them. |
 | `power` | string | no | The power of every channel that sets none: a level or watts. See [`power`](#power). |
-| `power_levels` | mapping | no | The watts, or the radio's value, of each power level. The `chirp` renderer needs it for every level its channels have, and so does `jayt`. See [`power`](#power). |
+| `power_levels` | mapping | no | The watts, or the radio's value, of each power level. The `chirp` renderer needs it for every level its channels have, and `jayt` for `Mid`. See [`power`](#power). |
 | `power_range` | mapping | no | `{min, max, step}` in watts, for a radio that sets watts in steps. No renderer writes it yet. See [`power`](#power). |
 | `naming` | mapping | no | The names of upstream channels, and name replacements. |
 
@@ -164,7 +164,7 @@ When the radio's watts differ from the watts a channel asks for, the selection r
 |---|---|---|
 | `qdmr` | watts, or `Max`, `High`, `Mid`, `Low`, `Min` | the level itself |
 | `chirp` | watts. Every channel needs a power. | no value |
-| `jayt` | `LOW`, `LOW2`, `LOW3`, `HIGH`, in any case; no watts | no value |
+| `jayt` | `LOW`, `LOW2`, `LOW3`, `HIGH`, in any case; no watts | `Max` and `High`: `HIGH`; `Low` and `Min`: `LOW`; `Mid`: no value |
 | `hytera` | watts, or `High`, `Middle`, `Low` | `Max` and `High`: `High`; `Mid`: `Middle`; `Low` and `Min`: `Low` |
 | `ft5d` | none: the FT5D renderer writes no power, and `power` takes only a level or watts | |
 

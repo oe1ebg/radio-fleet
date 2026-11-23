@@ -139,7 +139,7 @@ power_levels: {Max: 25W, High: 25W, Mid: 10W, Low: 5W, Min: 5W}
 |---|---|---|
 | `qdmr` | watts, or `Max`, `High`, `Mid`, `Low`, `Min` | each level is its own value |
 | `chirp` | watts, such as `5W` or `0.5W`; every channel needs a power | watts pass as they are; a level has no value |
-| `jayt` | `LOW`, `LOW2`, `LOW3`, `HIGH` | no value |
+| `jayt` | `LOW`, `LOW2`, `LOW3`, `HIGH` | `Max`, `High`: `HIGH`; `Low`, `Min`: `LOW`; `Mid`: no value |
 | `hytera` | watts, or `High`, `Middle`, `Low` | `Max`, `High`: `High`; `Mid`: `Middle`; `Low`, `Min`: `Low` |
 | `ft5d` | none: the FT5D writes no power | |
 

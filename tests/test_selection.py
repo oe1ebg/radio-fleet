@@ -454,6 +454,18 @@ def test_watts_of_the_old_format_pass_unchanged_to_a_chirp_profile_without_power
     assert selection.power_notes == ()
 
 
+@pytest.mark.parametrize(("level", "value"), [("Max", "HIGH"), ("High", "HIGH"), ("Low", "LOW"), ("Min", "LOW")])
+def test_a_jayt_profile_maps_the_shared_levels_without_power_levels(tmp_path: Path, level: str, value: str) -> None:
+    the_fleet, own = step(
+        tmp_path,
+        STEP.replace("renderer: chirp", "renderer: jayt").replace(
+            "    power: High\n    power_levels: {High: 5W, Low: 1W}\n", f"    power: {level}\n"
+        ),
+    )
+    upstream = [c for c in STEP_UPSTREAM if c.callsign != "XX1AB"]
+    assert {c.power for c in select(the_fleet.radios["chirp"], upstream, own).channels} == {value}
+
+
 @pytest.mark.parametrize(("renderer", "fixed"), [("hytera", "Middle"), ("jayt", "LOW2")])
 def test_a_power_that_is_a_radio_value_refuses_a_channel_with_its_own_power(
     tmp_path: Path, renderer: str, fixed: str

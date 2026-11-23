@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from fnmatch import fnmatchcase
 from pathlib import Path
+from typing import Literal, get_args
 
 from radio_fleet import config, geo, hytera_tool, power
 from radio_fleet.config import ConfigError, Node
@@ -40,21 +41,34 @@ class _PowerValues:
     of_watts: Callable[[Power, Watts], str] | None
 
 
-_HYTERA_LEVELS = {Power.MAX: "High", Power.HIGH: "High", Power.MID: "Middle", Power.LOW: "Low", Power.MIN: "Low"}
+def _names(values: tuple[str, ...]) -> str:
+    return f"{', '.join(values[:-1])} or {values[-1]}"
+
+
+_JaytPower = Literal["LOW", "LOW2", "LOW3", "HIGH"]
+_JAYT_POWERS: tuple[_JaytPower, ...] = get_args(_JaytPower)
+_JAYT_LEVELS: Mapping[Power, _JaytPower] = {Power.MAX: "HIGH", Power.HIGH: "HIGH", Power.LOW: "LOW", Power.MIN: "LOW"}
+_HyteraPower = Literal["High", "Middle", "Low"]
+_HYTERA_POWERS: tuple[_HyteraPower, ...] = get_args(_HyteraPower)
+_HYTERA_LEVELS: Mapping[Power, _HyteraPower] = {
+    Power.MAX: "High",
+    Power.HIGH: "High",
+    Power.MID: "Middle",
+    Power.LOW: "Low",
+    Power.MIN: "Low",
+}
 _POWER_VALUES: Mapping[Renderer, _PowerValues] = {
     Renderer.QDMR: _PowerValues(
-        "Max, High, Mid, Low or Min",
+        _names(tuple(Power)),
         lambda value: value in tuple(Power),
         {level: level.value for level in Power},
         lambda level, _: level.value,
     ),
     Renderer.CHIRP: _PowerValues("watts, such as 5W", lambda _: False, {}, lambda _, watts: str(watts)),
-    Renderer.JAYT: _PowerValues(
-        "LOW, LOW2, LOW3 or HIGH", lambda value: value.upper() in ("LOW", "LOW2", "LOW3", "HIGH"), {}, None
-    ),
+    Renderer.JAYT: _PowerValues(_names(_JAYT_POWERS), lambda value: value.upper() in _JAYT_POWERS, _JAYT_LEVELS, None),
     Renderer.HYTERA: _PowerValues(
-        "High, Middle or Low",
-        lambda value: value in ("High", "Middle", "Low"),
+        _names(_HYTERA_POWERS),
+        lambda value: value in _HYTERA_POWERS,
         _HYTERA_LEVELS,
         lambda level, _: _HYTERA_LEVELS[level],
     ),
